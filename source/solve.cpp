@@ -254,7 +254,7 @@ public:
 		for (size_t ci1 = 0; ci1 < cleaner_status_.size() - 1; ++ci1) {
 			size_t position = cleaner_status_[ci1].position_now_;
 			for (size_t ci2 = ci1 + 1; ci2 < cleaner_status_.size(); ++ci2) {
-				if (position == cleaner_status_[ci2].position_now_ && cleaner_status_[ci1].type_ != cleaner_status_[ci2].type_ && cleaner_status_[ci1].move_now_ == cleaner_status_[ci2].move_now_) {
+				if (position == cleaner_status_[ci2].position_now_ && cleaner_status_[ci1].move_now_ == cleaner_status_[ci2].move_now_) {
 					// 範囲攻撃発動！
 					for (int i = -1; i <= 1; ++i) {
 						for (int j = -1; j <= 1; ++j) {
