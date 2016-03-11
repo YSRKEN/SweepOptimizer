@@ -195,3 +195,5 @@ SweepOptimizer.VC.db
 sample/*.jpg
 sample/q*.txt
 SweepOptimizer.VC.VC.opendb
+sample/pic/
+sample/txt/
