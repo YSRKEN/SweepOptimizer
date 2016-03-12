@@ -2,6 +2,13 @@
 
 #include "clipboard.hsp"
 
+#uselib "shell32.dll"
+#func DragAcceptFiles "DragAcceptFiles" int,int
+#func DragQueryFile "DragQueryFileA" int,int,int,int
+#func DragFinish "DragFinish" int
+#const WM_DROPFILES 0x0233
+oncmd gosub *OnDropFiles,WM_DROPFILES
+
 block_size = 50
 x_size = 6 :y_size = 5
 max_x_size = 10 :max_y_size = 10
@@ -34,19 +41,6 @@ repeat
 				data(pos_x, pos_y) = (data(pos_x, pos_y) + 10) \ 11
 			}
 			gosub *redraw_window
-		}else{
-			if(mousey >= block_size * y_size + 1 + 24){
-				if(ky & 256){
-					gosub *copy
-					dialog "コピーしました。", 0, "editor"
-				}else{
-					dialog "消去しますか？", 2, "editor"
-					if(stat == 6){
-						dim data, max_x_size, max_y_size
-						gosub *redraw_window
-					}
-				}
-			}
 		}
 	}
 	wait 5
@@ -58,7 +52,12 @@ loop
 	objsize 40, 20
 	pos 0, 0 :input x_size
 	pos 60, 0 :input y_size
+	objsize 80, 24
+	pos block_size * x_size + 1 - 160, block_size * y_size + 24 + 1 + mesbox_y
+	button gosub "コピー", *copy
 	pos block_size * x_size + 1 - 80, block_size * y_size + 24 + 1 + mesbox_y
+	button gosub "削除", *erase
+	DragAcceptFiles hwnd, 1
 	gosub *redraw_window
 return
 
@@ -139,4 +138,38 @@ return
 
 *copy
 	ClipB_SetText output
+	dialog "コピーしました。", 0, "editor"
+return
+
+*erase
+	dialog "消去しますか？", 2, "editor"
+	if(stat == 6){
+		dim data, max_x_size, max_y_size
+		gosub *redraw_window
+	}
+return
+
+*OnDropFiles
+	hDrop = wParam
+	DragQueryFile hDrop, -1, 0, 0
+	nDrop = stat
+	sdim FileName, 260
+	repeat nDrop
+		DragQueryFile hdrop, cnt, varptr(FileName), 260
+		notesel buf
+		noteload FileName
+		noteget get, 0
+		split get, " ", temp
+		x_size = int(temp(0)) :y_size = int(temp(1))
+		for y, 0, y_size
+			noteget get, y + 1
+			split get, " ", temp
+			for x, 0, x_size
+				data(x, y) = int(temp(x))
+			next
+		next
+		gosub *remake_window
+		break
+	loop
+	DragFinish hDrop
 return
