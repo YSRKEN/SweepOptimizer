@@ -1,0 +1,140 @@
+#packopt name "editor"
+
+#include "clipboard.hsp"
+
+block_size = 50
+x_size = 6 :y_size = 5
+max_x_size = 10 :max_y_size = 10
+sdim output, 1024
+dim data, max_x_size, max_y_size
+
+gosub *remake_window
+
+x_size_ = x_size
+y_size_ = y_size
+repeat
+	if(x_size_ != x_size){
+		x_size = limit(x_size, 1, max_x_size)
+		gosub *remake_window
+		x_size_ = x_size
+	}
+	if(y_size_ != y_size){
+		y_size = limit(y_size, 1, max_y_size)
+		gosub *remake_window
+		y_size_ = y_size
+	}
+	stick ky
+	if((ky & 256) || (ky & 512)){
+		if(mousey < block_size * y_size + 1 + 24){
+			pos_x = limit(mousex / block_size, 0, x_size - 1)
+			pos_y = limit((mousey - 24) / block_size, 0, y_size - 1)
+			if(ky & 256){
+				data(pos_x, pos_y) = (data(pos_x, pos_y) + 1) \ 11
+			}else{
+				data(pos_x, pos_y) = (data(pos_x, pos_y) + 10) \ 11
+			}
+			gosub *redraw_window
+		}else{
+			if(ky & 256){
+				gosub *copy
+				dialog "コピーしました。", 0, "editor"
+			}else{
+				dialog "消去しますか？", 2, "editor"
+				if(stat == 6){
+					dim data, max_x_size, max_y_size
+					gosub *redraw_window
+				}
+			}
+		}
+	}
+	wait 5
+loop
+
+*remake_window
+	screen 0, block_size * x_size + 1, block_size * y_size + 1 + 24 * 2 + mesbox_y
+	title "editor"
+	objsize 40, 20
+	pos 0, 0 :input x_size
+	pos 60, 0 :input y_size
+	pos block_size * x_size + 1 - 80, block_size * y_size + 24 + 1 + mesbox_y
+	gosub *redraw_window
+return
+
+*redraw_window
+	redraw 0
+		color 255, 255, 255 :boxf
+		for y ,0, y_size
+			for x, 0, x_size
+				color
+				px = x * block_size
+				py = y * block_size + 24
+				boxf px, py, px + block_size, py + block_size
+				switch data(x, y)
+					case 0
+						color 189, 174, 153
+					swbreak
+					case 1
+						color 200, 200, 200
+					swbreak
+					case 2
+						color 51, 128, 148
+					swbreak
+					case 3
+						color 148, 52, 66
+					swbreak
+					case 4
+						color 86, 101, 42
+					swbreak
+					case 5
+						color 117, 179, 190
+					swbreak
+					case 6
+						color 188, 72, 75
+					swbreak
+					case 7
+						color 69, 98, 50
+					swbreak
+					case 8
+						color 204, 95, 88
+					swbreak
+					case 9
+						color 98, 121, 69
+					swbreak
+					case 10
+						color 68, 50, 48
+					swbreak
+				swend
+				px += 1
+				py += 1
+				boxf px, py, px + block_size - 2, py + block_size - 2
+				color
+				pos px, py
+				mes data(x, y)
+			next
+		next
+		output = ""
+		output += "" + x_size + " " + y_size + "\n"
+		dim count, 3
+		for y ,0, y_size
+			for x, 0, x_size
+				if(x != 0) :output += " "
+				output += "" + data(x ,y)
+				if(data(x ,y) == 2) :count(0)++
+				if(data(x ,y) == 3) :count(1)++
+				if(data(x ,y) == 4) :count(2)++
+			next
+			output += "\n"
+		next
+		for c, 0, 3
+			output += "" + count(c)
+			for i, 0, count(c)
+				output += " 0"
+			next
+			output += "\n"
+		next
+	redraw 1
+return
+
+*copy
+	ClipB_SetText output
+return
