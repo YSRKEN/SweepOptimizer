@@ -3,6 +3,7 @@
 #include <array>
 #include <chrono>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <list>
 #include <string>
@@ -41,11 +42,18 @@ struct Status {
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
 
 class Query{
-	size_t x_, y_;	//盤面サイズ
-	vector<Floor> floor_;	//床の状態
-	vector<Status> cleaner_status_;		//掃除人の種類・現在の歩数・最大歩数・現在の位置・過去の位置
+	// 盤面サイズ
+	size_t x_, y_;
+	// 床の状態
+	vector<Floor> floor_;
+	// 掃除人の種類・現在の歩数・最大歩数・現在の位置・過去の位置
+	vector<Status> cleaner_status_;
+	// 最大歩数の最大
 	size_t max_depth_;
-	vector<std::list<size_t>> cleaner_move_;	//解答における、各掃除人の移動経路
+	// 解答における、各掃除人の移動経路
+	vector<std::list<size_t>> cleaner_move_;
+	// マスA→マスBへの最小移動歩数
+	vector<vector<size_t>> min_cost_;
 public:
 	// コンストラクタ
 	Query(char file_name[]){
@@ -81,6 +89,7 @@ public:
 				}
 			}
 		}
+		// 掃除人データを読み込み、反映させる
 		max_depth_ = 0;
 		for(size_t ti = 0; ti < kCleanerTypes; ++ti){
 			size_t temp;
@@ -101,6 +110,56 @@ public:
 			}
 		}
 		cleaner_move_.resize(cleaner_status_.size());
+		// 事前に最小移動歩数を計算しておく(ワーシャル・フロイド法)
+		min_cost_.resize(x_ * y_);
+		const size_t INF = x_ * y_ + 1;
+		for (size_t k = 0; k < x_ * y_; ++k) {
+			min_cost_[k].resize(x_ * y_, INF);
+		}
+		for (size_t iy = 1; iy <= y; ++iy) {
+			for (size_t ix = 1; ix <= x; ++ix) {
+				size_t i = iy * x_ + ix;
+				if (floor_[i] > Floor::Bottle) continue;
+				for (size_t jy = 1; jy <= y; ++jy) {
+					for (size_t jx = 1; jx <= x; ++jx) {
+						size_t j = jy * x_ + jx;
+						if (floor_[j] > Floor::Bottle) continue;
+						if (i == j) {
+							 min_cost_[i][j] = 0;
+							continue;
+						}
+						if (i + 1 == j || j + 1 == i || i + x_ == j || j + x_ == i) {
+							min_cost_[i][j] = 1;
+							continue;
+						}
+					}
+				}
+			}
+		}
+		for (size_t i = 0; i < x_ * y_; ++i) {
+			for (size_t j = 0; j < x_ * y_; ++j) {
+				for (size_t k = 0; k < x_ * y_; ++k) {
+					min_cost_[j][k] = std::min(min_cost_[j][k], min_cost_[j][i] + min_cost_[i][k]);
+				}
+			}
+		}
+		/*for (auto &it_c : cleaner_status_) {
+			cout << "・" << it_c.type_ << " " << GetPos(it_c.position_now_) << " " << it_c.move_max_ << endl;
+			size_t i = it_c.position_now_;
+			for (size_t jy = 1; jy <= y; ++jy) {
+				for (size_t jx = 1; jx <= x; ++jx) {
+					size_t j = jy * x_ + jx;
+					if (min_cost_[i][j] < INF) {
+						cout << std::setw(2) << min_cost_[i][j] << " ";
+					}
+					else {
+						cout << "■ ";
+					}
+				}
+				cout << endl;
+			}
+			cout << endl;
+		}*/
 	}
 	// ヘルパー関数
 	string GetPos(const size_t position) {
@@ -148,7 +207,7 @@ public:
 		return true;
 	}
 	// 探索ルーチン
-	bool Move(const size_t depth, const size_t index){
+	bool Move(const size_t depth, const size_t index, const bool combo_flg){
 		// 全員を1歩だけ進める＝depthと等しい歩数の掃除人がいない
 		bool move_flg = false;
 		for(size_t ci = index; ci < cleaner_status_.size(); ++ci){
@@ -225,7 +284,7 @@ public:
 								}
 									//移動処理
 									move_flg = true;
-									bool flg = Move(depth, ci + 1);
+									bool flg = Move(depth, ci + 1, combo_flg);
 									if (flg) {
 										cleaner_move_[ci].push_front(next_position);
 										return true;
@@ -249,24 +308,122 @@ public:
 				return false;
 			}
 		}
-		// 同タイミングで複数人がコラボすることによる範囲攻撃
-		vector<Floor> floor_back = floor_;
-		for (size_t ci1 = 0; ci1 < cleaner_status_.size() - 1; ++ci1) {
-			size_t position = cleaner_status_[ci1].position_now_;
-			for (size_t ci2 = ci1 + 1; ci2 < cleaner_status_.size(); ++ci2) {
-				if (position == cleaner_status_[ci2].position_now_ && cleaner_status_[ci1].move_now_ == cleaner_status_[ci2].move_now_) {
-					// 範囲攻撃発動！
-					for (int i = -1; i <= 1; ++i) {
-						for (int j = -1; j <= 1; ++j) {
-							if (floor_[position + i + j * x_] == Floor::Dirty) floor_[position + i + j * x_] = Floor::Clean;
+		if (combo_flg) {
+			// min_cost_による枝刈りを行う
+			for (size_t j = 1; j < y_ - 1; ++j) {
+				for (size_t i = 1; i < x_ - 1; ++i) {
+					size_t position = j * x_ + i;
+					bool can_move_flg = false;
+					switch (floor_[position]) {
+					case Floor::Dirty:
+						for (auto &it_c : cleaner_status_) {
+							if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					case Floor::Pool:
+						for (auto &it_c : cleaner_status_) {
+							if (it_c.type_ == Floor::Boy && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					case Floor::Apple:
+						for (auto &it_c : cleaner_status_) {
+							if (it_c.type_ == Floor::Girl && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					case Floor::Bottle:
+						for (auto &it_c : cleaner_status_) {
+							if (it_c.type_ == Floor::Robot && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					default:
+						continue;
+					}
+					if (!can_move_flg) {
+						return false;
+					}
+				}
+			}
+			// 同タイミングで複数人がコラボすることによる範囲攻撃を考慮する
+			vector<Floor> floor_back = floor_;
+			for (size_t ci1 = 0; ci1 < cleaner_status_.size() - 1; ++ci1) {
+				size_t position = cleaner_status_[ci1].position_now_;
+				for (size_t ci2 = ci1 + 1; ci2 < cleaner_status_.size(); ++ci2) {
+					if (position == cleaner_status_[ci2].position_now_ && cleaner_status_[ci1].move_now_ == cleaner_status_[ci2].move_now_) {
+						// 範囲攻撃発動！
+						for (int i = -1; i <= 1; ++i) {
+							for (int j = -1; j <= 1; ++j) {
+								if (floor_[position + i + j * x_] == Floor::Dirty) floor_[position + i + j * x_] = Floor::Clean;
+							}
 						}
 					}
 				}
 			}
+			bool flg = Move(depth + 1, 0, combo_flg);
+			floor_ = floor_back;
+			return flg;
 		}
-		bool flg = Move(depth + 1, 0);
-		floor_ = floor_back;
-		return flg;
+		else {
+			// min_cost_による枝刈りを行う
+			for (size_t j = 1; j < y_ - 1; ++j) {
+				for (size_t i = 1; i < x_ - 1; ++i) {
+					size_t position = j * x_ + i;
+					bool can_move_flg = false;
+					switch (floor_[position]) {
+					case Floor::Dirty:
+						for (auto &it_c : cleaner_status_) {
+							if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					case Floor::Pool:
+						for (auto &it_c : cleaner_status_) {
+							if (it_c.type_ == Floor::Boy && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					case Floor::Apple:
+						for (auto &it_c : cleaner_status_) {
+							if (it_c.type_ == Floor::Girl && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					case Floor::Bottle:
+						for (auto &it_c : cleaner_status_) {
+							if (it_c.type_ == Floor::Robot && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
+								can_move_flg = true;
+								break;
+							}
+						}
+						break;
+					default:
+						continue;
+					}
+					if (!can_move_flg) {
+						return false;
+					}
+				}
+			}
+			bool flg = Move(depth + 1, 0, combo_flg);
+			return flg;
+		}
 	}
 	// 解答を表示する
 	void ShowAnswer() {
@@ -303,8 +460,15 @@ int main(int argc, char *argv[]){
 	Query query(argv[1]);
 	query.Put();
 	const auto process_begin_time = std::chrono::high_resolution_clock::now();
-	const bool flg = query.Move(0, 0);
-	const auto process_end_time = std::chrono::high_resolution_clock::now();
-	if(flg) query.ShowAnswer();
-	cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
+	bool flg = query.Move(0, 0, false);
+	auto process_end_time = std::chrono::high_resolution_clock::now();
+	if (!flg) {
+		cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
+		flg = query.Move(0, 0, true);
+		process_end_time = std::chrono::high_resolution_clock::now();
+	}
+	if (flg) {
+		query.ShowAnswer();
+		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
+	}
 }
