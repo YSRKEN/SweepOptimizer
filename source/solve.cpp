@@ -206,6 +206,71 @@ public:
 		}
 		return true;
 	}
+	// 現状では塗りつぶしきれない場合はfalse(nは許容量)
+	bool CanMove(const size_t n) const noexcept {
+		for (size_t j = 1; j < y_ - 1; ++j) {
+			for (size_t i = 1; i < x_ - 1; ++i) {
+				const size_t position = j * x_ + i;
+				bool can_move_flg = false;
+				switch (floor_[position]) {
+				case Floor::Dirty:
+					for (const auto &it_c : cleaner_status_) {
+						if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + n) {
+							can_move_flg = true;
+							break;
+						}
+					}
+					break;
+				case Floor::Pool:
+					for (const auto &it_c : cleaner_status_) {
+						if (it_c.type_ == Floor::Boy && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + n) {
+							can_move_flg = true;
+							break;
+						}
+					}
+					break;
+				case Floor::Apple:
+					for (const auto &it_c : cleaner_status_) {
+						if (it_c.type_ == Floor::Girl && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + n) {
+							can_move_flg = true;
+							break;
+						}
+					}
+					break;
+				case Floor::Bottle:
+					for (const auto &it_c : cleaner_status_) {
+						if (it_c.type_ == Floor::Robot && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + n) {
+							can_move_flg = true;
+							break;
+						}
+					}
+					break;
+				default:
+					continue;
+				}
+				if (!can_move_flg) {
+					return false;
+				}
+			}
+		}
+		return true;
+	}
+	// 範囲攻撃
+	void CleanCombo() noexcept {
+		for (size_t ci1 = 0; ci1 < cleaner_status_.size() - 1; ++ci1) {
+			size_t position = cleaner_status_[ci1].position_now_;
+			for (size_t ci2 = ci1 + 1; ci2 < cleaner_status_.size(); ++ci2) {
+				if (position == cleaner_status_[ci2].position_now_ && cleaner_status_[ci1].move_now_ == cleaner_status_[ci2].move_now_) {
+					// 範囲攻撃発動！
+					for (int i = -1; i <= 1; ++i) {
+						for (int j = -1; j <= 1; ++j) {
+							if (floor_[position + i + j * x_] == Floor::Dirty) floor_[position + i + j * x_] = Floor::Clean;
+						}
+					}
+				}
+			}
+		}
+	}
 	// 探索ルーチン
 	bool Move(const size_t depth, const size_t index, const bool combo_flg){
 		// 全員を1歩だけ進める＝depthと等しい歩数の掃除人がいない
@@ -215,9 +280,9 @@ public:
 			// 歩を進めるべきではない掃除人は飛ばす
 			if (it_c.move_now_ != depth) continue;
 			if (it_c.move_now_ == it_c.move_max_) continue;
-			auto position = it_c.position_now_;
+			const auto position = it_c.position_now_;
 			// 上下左右の動きについて議論する
-			for (auto &next_position : { position - x_ , position - 1, position + 1, position + x_ }) {
+			for (const auto next_position : { position - x_ , position - 1, position + 1, position + x_ }) {
 				// すぐ前に行った場所にバックするのは禁じられている
 				if (next_position == it_c.position_old_) continue;
 				// 障害物は乗り越えられない
@@ -227,7 +292,7 @@ public:
 				//現在座標
 				it_c.position_now_ = next_position;
 					//移動後の床の状態
-					auto old_floor = floor_ref;
+					const auto old_floor = floor_ref;
 					switch (floor_ref) {
 					case Floor::Dirty:
 						floor_ref = Floor::Clean;
@@ -252,15 +317,15 @@ public:
 						}
 						break;
 					default:
-						throw;
+						break;
 					}
 						//歩数カウント
 						++it_c.move_now_;
 							//前回の座標
-							auto old_position = it_c.position_old_;
+							const auto old_position = it_c.position_old_;
 							it_c.position_old_ = position;
 								//前回のストック数
-								auto old_stock = it_c.stock_;
+								const auto old_stock = it_c.stock_;
 								switch (it_c.type_) {
 								case Floor::Girl:
 									if (floor_[next_position - x_] == Floor::DustBox
@@ -279,13 +344,11 @@ public:
 									}
 									break;
 								default:
-
 									break;
 								}
 									//移動処理
 									move_flg = true;
-									bool flg = Move(depth, ci + 1, combo_flg);
-									if (flg) {
+									if (Move(depth, ci + 1, combo_flg)) {
 										cleaner_move_[ci].push_front(next_position);
 										return true;
 									}
@@ -310,119 +373,18 @@ public:
 		}
 		if (combo_flg) {
 			// min_cost_による枝刈りを行う
-			for (size_t j = 1; j < y_ - 1; ++j) {
-				for (size_t i = 1; i < x_ - 1; ++i) {
-					size_t position = j * x_ + i;
-					bool can_move_flg = false;
-					switch (floor_[position]) {
-					case Floor::Dirty:
-						for (auto &it_c : cleaner_status_) {
-							if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					case Floor::Pool:
-						for (auto &it_c : cleaner_status_) {
-							if (it_c.type_ == Floor::Boy && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					case Floor::Apple:
-						for (auto &it_c : cleaner_status_) {
-							if (it_c.type_ == Floor::Girl && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					case Floor::Bottle:
-						for (auto &it_c : cleaner_status_) {
-							if (it_c.type_ == Floor::Robot && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					default:
-						continue;
-					}
-					if (!can_move_flg) {
-						return false;
-					}
-				}
-			}
+			if (!CanMove(2)) return false;
 			// 同タイミングで複数人がコラボすることによる範囲攻撃を考慮する
 			vector<Floor> floor_back = floor_;
-			for (size_t ci1 = 0; ci1 < cleaner_status_.size() - 1; ++ci1) {
-				size_t position = cleaner_status_[ci1].position_now_;
-				for (size_t ci2 = ci1 + 1; ci2 < cleaner_status_.size(); ++ci2) {
-					if (position == cleaner_status_[ci2].position_now_ && cleaner_status_[ci1].move_now_ == cleaner_status_[ci2].move_now_) {
-						// 範囲攻撃発動！
-						for (int i = -1; i <= 1; ++i) {
-							for (int j = -1; j <= 1; ++j) {
-								if (floor_[position + i + j * x_] == Floor::Dirty) floor_[position + i + j * x_] = Floor::Clean;
-							}
-						}
-					}
-				}
-			}
+			CleanCombo();
 			bool flg = Move(depth + 1, 0, combo_flg);
 			floor_ = floor_back;
 			return flg;
 		}
 		else {
 			// min_cost_による枝刈りを行う
-			for (size_t j = 1; j < y_ - 1; ++j) {
-				for (size_t i = 1; i < x_ - 1; ++i) {
-					size_t position = j * x_ + i;
-					bool can_move_flg = false;
-					switch (floor_[position]) {
-					case Floor::Dirty:
-						for (auto &it_c : cleaner_status_) {
-							if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					case Floor::Pool:
-						for (auto &it_c : cleaner_status_) {
-							if (it_c.type_ == Floor::Boy && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					case Floor::Apple:
-						for (auto &it_c : cleaner_status_) {
-							if (it_c.type_ == Floor::Girl && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					case Floor::Bottle:
-						for (auto &it_c : cleaner_status_) {
-							if (it_c.type_ == Floor::Robot && min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
-								can_move_flg = true;
-								break;
-							}
-						}
-						break;
-					default:
-						continue;
-					}
-					if (!can_move_flg) {
-						return false;
-					}
-				}
-			}
-			bool flg = Move(depth + 1, 0, combo_flg);
-			return flg;
+			if (!CanMove(0)) return false;
+			return Move(depth + 1, 0, combo_flg);
 		}
 	}
 	// 解答を表示する
@@ -471,4 +433,5 @@ int main(int argc, char *argv[]){
 		query.ShowAnswer();
 		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
 	}
+	return 0;
 }
