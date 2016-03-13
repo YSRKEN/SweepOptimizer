@@ -231,6 +231,57 @@ public:
 			}
 		}
 	}
+	// 周囲にゴミ箱/リサイクル箱があった際に捨てる
+	size_t SurroundedBox(const Status &cleaner) const noexcept {
+		switch (cleaner.type_) {
+		case Floor::Girl:
+			if (floor_[cleaner.position_now_ - x_] == Floor::DustBox
+				|| floor_[cleaner.position_now_ - 1] == Floor::DustBox
+				|| floor_[cleaner.position_now_ + 1] == Floor::DustBox
+				|| floor_[cleaner.position_now_ + x_] == Floor::DustBox) {
+				return 0;
+			}
+			break;
+		case Floor::Robot:
+			if (floor_[cleaner.position_now_ - x_] == Floor::RecycleBox
+				|| floor_[cleaner.position_now_ - 1] == Floor::RecycleBox
+				|| floor_[cleaner.position_now_ + 1] == Floor::RecycleBox
+				|| floor_[cleaner.position_now_ + x_] == Floor::RecycleBox) {
+				return 0;
+			}
+			break;
+		default:
+			break;
+		}
+		return cleaner.stock_;
+	}
+	// 汚れやゴミなどがあった場合は掃除する
+	void CleanFloor(Floor &floor, Status &cleaner) noexcept{
+		switch (floor) {
+		case Floor::Dirty:
+			floor = Floor::Clean;
+			break;
+		case Floor::Clean:
+			break;
+		case Floor::Pool:
+			if (cleaner.type_ == Floor::Boy) floor = Floor::Clean;
+			break;
+		case Floor::Apple:
+			if (cleaner.type_ == Floor::Girl) {
+				++cleaner.stock_;
+				floor = Floor::Clean;
+			}
+			break;
+		case Floor::Bottle:
+			if (cleaner.type_ == Floor::Robot) {
+				++cleaner.stock_;
+				floor = Floor::Clean;
+			}
+			break;
+		default:
+			break;
+		}
+	}
 	// 探索ルーチン
 	bool Move(const size_t depth, const size_t index, const bool combo_flg){
 		// 全員を1歩だけ進める＝depthと等しい歩数の掃除人がいない
@@ -253,32 +304,7 @@ public:
 				it_c.position_now_ = next_position;
 				//移動後の床の状態
 				const auto old_floor = floor_ref;
-				switch (floor_ref) {
-				case Floor::Dirty:
-					floor_ref = Floor::Clean;
-					break;
-				case Floor::Clean:
-					break;
-				case Floor::Pool:
-					if (it_c.type_ == Floor::Boy) {
-						floor_ref = Floor::Clean;
-					}
-					break;
-				case Floor::Apple:
-					if (it_c.type_ == Floor::Girl) {
-						floor_ref = Floor::Clean;
-						++it_c.stock_;
-					}
-					break;
-				case Floor::Bottle:
-					if (it_c.type_ == Floor::Robot) {
-						floor_ref = Floor::Clean;
-						++it_c.stock_;
-					}
-					break;
-				default:
-					break;
-				}
+				CleanFloor(floor_ref, it_c);
 				//歩数カウント
 				++it_c.move_now_;
 				//前回の座標
@@ -286,26 +312,7 @@ public:
 				it_c.position_old_ = position;
 				//前回のストック数
 				const auto old_stock = it_c.stock_;
-				switch (it_c.type_) {
-				case Floor::Girl:
-					if (floor_[next_position - x_] == Floor::DustBox
-						|| floor_[next_position - 1] == Floor::DustBox
-						|| floor_[next_position + 1] == Floor::DustBox
-						|| floor_[next_position + x_] == Floor::DustBox) {
-						it_c.stock_ = 0;
-					}
-					break;
-				case Floor::Robot:
-					if (floor_[next_position - x_] == Floor::RecycleBox
-						|| floor_[next_position - 1] == Floor::RecycleBox
-						|| floor_[next_position + 1] == Floor::RecycleBox
-						|| floor_[next_position + x_] == Floor::RecycleBox) {
-						it_c.stock_ = 0;
-					}
-					break;
-				default:
-					break;
-				}
+				it_c.stock_ = SurroundedBox(it_c);
 				//移動処理
 				move_flg = true;
 				if (Move(depth, ci + 1, combo_flg)) {
@@ -336,9 +343,16 @@ public:
 			if (!CanMove(combo_flg)) return false;
 			// 同タイミングで複数人がコラボすることによる範囲攻撃を考慮する
 			vector<Floor> floor_back = floor_;
+//			cout << "A" << endl;
+//			Put();
 			CleanCombo();
 			bool flg = Move(depth + 1, 0, combo_flg);
-			floor_ = std::move(floor_back);
+//			cout << "B" << endl;
+//			Put();
+			floor_ = floor_back;
+//			floor_ = std::move(floor_back);
+//			cout << "C" << endl;
+//			Put();
 			return flg;
 		}
 		else {
