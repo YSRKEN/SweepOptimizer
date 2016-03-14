@@ -70,7 +70,9 @@ class Query{
 	vector<std::list<size_t>> cleaner_move_;
 	// マスA→マスBへの最小移動歩数
 	vector<vector<size_t>> min_cost_;
-	vector<vector<size_t>> min_cost_combo_;
+	vector<vector<size_t>> min_cost_combo_;	//コンボ用なので上限が緩い
+	// 周囲にゴミ箱/リサイクル箱があったらtrue
+	vector<char> near_dustbox_, near_recyclebox_;
 public:
 	// コンストラクタ
 	Query(const char file_name[]){
@@ -84,24 +86,24 @@ public:
 		// 盤面データを読み込み、反映させる
 		vector<vector<Status>> cleaner_status_temp;
 		cleaner_status_temp.resize(kCleanerTypes);
-		for (size_t j = 0; j < y; ++j) {
-			for (size_t i = 0; i < x; ++i) {
+		for (size_t j = 1; j <= y; ++j) {
+			for (size_t i = 1; i <= x; ++i) {
 				size_t temp;
 				fin >> temp;
 				if (temp >= Floor::Types) temp = Floor::Obstacle;
-				size_t k = (j + 1) * x_ + (i + 1);
-				switch (floor_[k] = floor_types[temp]) {
+				size_t position = j * x_ + i;
+				switch (floor_[position] = floor_types[temp]) {
 				case Floor::Boy:
-					cleaner_status_temp[0].push_back(Status{ Floor::Boy, 0, 0, k, k, k, 0});
-					floor_[k] = Floor::Clean;
+					cleaner_status_temp[0].push_back(Status{ Floor::Boy, 0, 0, position, position, position, 0});
+					floor_[position] = Floor::Clean;
 					break;
 				case Floor::Girl:
-					cleaner_status_temp[1].push_back(Status{ Floor::Girl, 0, 0, k, k,k, 0 });
-					floor_[k] = Floor::Clean;
+					cleaner_status_temp[1].push_back(Status{ Floor::Girl, 0, 0, position, position, position, 0 });
+					floor_[position] = Floor::Clean;
 					break;
 				case Floor::Robot:
-					cleaner_status_temp[2].push_back(Status{ Floor::Robot, 0, 0, k, k,k, 0 });
-					floor_[k] = Floor::Clean;
+					cleaner_status_temp[2].push_back(Status{ Floor::Robot, 0, 0, position, position, position, 0 });
+					floor_[position] = Floor::Clean;
 					break;
 				default:
 					break;
@@ -160,6 +162,26 @@ public:
 			for (size_t j = 0; j < x_ * y_; ++j) {
 				for (size_t k = 0; k < x_ * y_; ++k) {
 					min_cost_[j][k] = std::min(min_cost_[j][k], min_cost_[j][i] + min_cost_[i][k]);
+				}
+			}
+		}
+		// 事前に周囲にゴミ箱/リサイクル箱があるかを判定しておく
+		near_dustbox_.resize(x_ * y_, 0);
+		near_recyclebox_.resize(x_ * y_, 0);
+		for (size_t j = 1; j <= y_mini_; ++j) {
+			for (size_t i = 1; i <= x_mini_; ++i) {
+				size_t position = j * x_ + i;
+				if (floor_[position - x_] == Floor::DustBox
+					|| floor_[position - 1] == Floor::DustBox
+					|| floor_[position + 1] == Floor::DustBox
+					|| floor_[position + x_] == Floor::DustBox) {
+					near_dustbox_[position] = 1;
+				}
+				if (floor_[position - x_] == Floor::RecycleBox
+					|| floor_[position - 1] == Floor::RecycleBox
+					|| floor_[position + 1] == Floor::RecycleBox
+					|| floor_[position + x_] == Floor::RecycleBox) {
+					near_recyclebox_[position] = 1;
 				}
 			}
 		}
@@ -315,20 +337,10 @@ public:
 	size_t SurroundedBox(const Status &cleaner) const noexcept {
 		switch (cleaner.type_) {
 		case Floor::Girl:
-			if (floor_[cleaner.position_now_ - x_] == Floor::DustBox
-				|| floor_[cleaner.position_now_ - 1] == Floor::DustBox
-				|| floor_[cleaner.position_now_ + 1] == Floor::DustBox
-				|| floor_[cleaner.position_now_ + x_] == Floor::DustBox) {
-				return 0;
-			}
+			if (near_dustbox_[cleaner.position_now_] != 0) return 0;
 			break;
 		case Floor::Robot:
-			if (floor_[cleaner.position_now_ - x_] == Floor::RecycleBox
-				|| floor_[cleaner.position_now_ - 1] == Floor::RecycleBox
-				|| floor_[cleaner.position_now_ + 1] == Floor::RecycleBox
-				|| floor_[cleaner.position_now_ + x_] == Floor::RecycleBox) {
-				return 0;
-			}
+			if (near_recyclebox_[cleaner.position_now_] != 0) return 0;
 			break;
 		default:
 			break;
