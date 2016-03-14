@@ -343,16 +343,10 @@ public:
 			if (!CanMove(combo_flg)) return false;
 			// 同タイミングで複数人がコラボすることによる範囲攻撃を考慮する
 			vector<Floor> floor_back = floor_;
-//			cout << "A" << endl;
-//			Put();
 			CleanCombo();
 			bool flg = Move(depth + 1, 0, combo_flg);
-//			cout << "B" << endl;
-//			Put();
 			floor_ = floor_back;
 //			floor_ = std::move(floor_back);
-//			cout << "C" << endl;
-//			Put();
 			return flg;
 		}
 		else {
@@ -403,9 +397,7 @@ int main(int argc, char *argv[]){
 		flg = query.Move(0, 0, true);
 		process_end_time = std::chrono::high_resolution_clock::now();
 	}
-	if (flg) {
-		query.ShowAnswer();
-		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
-	}
+	if (flg) query.ShowAnswer();
+	cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
 	return 0;
 }
