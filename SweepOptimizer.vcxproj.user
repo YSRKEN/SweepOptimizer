@@ -23,7 +23,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)\sample</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>q33.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>q09.txt</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Clang Release|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)\sample</LocalDebuggerWorkingDirectory>
@@ -31,7 +31,7 @@
     <LocalDebuggerCommandArguments>q59.txt</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LocalDebuggerCommandArguments>q33.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>q09.txt</LocalDebuggerCommandArguments>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>$(ProjectDir)\sample\</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
