@@ -48,6 +48,9 @@ enum Direction : size_t {
 	Max = Down
 };
 
+Direction operator++(Direction d) {
+	return static_cast<Direction>(static_cast<size_t>(d) + 1);
+}
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
 
 class Query{
@@ -375,6 +378,7 @@ public:
 //		cout << depth << endl;
 		if (depth >= max_depth_) return Sweeped();
 		vector<Direction> direction(cleaner_status_.size(), Direction::Up);	//各ユニットの移動状態を記述する
+		auto first_not_max_it = direction.end();
 		while (true) {
 			// 歩数制限・バック禁止以外のケースで皆が移動できない場合は弾く
 			bool can_move_flg = true;
@@ -442,20 +446,17 @@ public:
 				}
 			}
 			// インクリメント処理
+			//インクリメント処理
 			if (direction[0] != Direction::Max) {
-				direction[0] = static_cast<Direction>(direction[0] + 1);
+				++direction[0];
 			}
-			else {
-				bool increment_flg = false;
-				for (auto it = direction.begin() + 1; it != direction.end(); ++it) {
-					if (*it == Direction::Max) continue;
-					std::fill(direction.begin(), it, Direction::Up);
-					*it = static_cast<Direction>(*it + 1);
-					increment_flg = true;
-					break;
-				}
-				if (!increment_flg) break;
+			else if (direction.end() != (first_not_max_it = std::find_if_not(direction.begin() + 1, direction.end(), [](Direction d) { return d == Direction::Max; }))) {
+				break;
 			}
+		}
+		if (direction.end() != first_not_max_it) {
+			std::fill(direction.begin(), first_not_max_it, Direction::Up);
+			++*first_not_max_it;
 		}
 		return solve_flg_;
 	}

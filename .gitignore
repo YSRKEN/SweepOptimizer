@@ -198,3 +198,4 @@ SweepOptimizer.VC.VC.opendb
 sample/pic/
 sample/txt/
 zip/
+*.VC.opendb
