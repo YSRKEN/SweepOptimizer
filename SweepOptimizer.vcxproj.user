@@ -23,7 +23,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)\sample</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>q64.txt</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>q33.txt</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Clang Release|x64'">
     <LocalDebuggerWorkingDirectory>$(ProjectDir)\sample</LocalDebuggerWorkingDirectory>

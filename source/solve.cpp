@@ -39,6 +39,14 @@ struct Status {
 	size_t stock_;			//リンゴ・ビンの所持数
 };
 
+enum Direction : size_t {
+	Up,
+	Right,
+	Down,
+	Left,
+	Max = Left
+};
+
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
 
 class Query{
@@ -356,13 +364,17 @@ public:
 		}
 	}
 	// 探索ルーチンその2
-	bool Move2(const size_t depth, const size_t index, const bool combo_flg) {
-		vector<size_t> direction(cleaner_status_.size(), 0);	//各ユニットの移動状態を記述する
+	bool Move2(const size_t depth, const bool combo_flg) {
+		vector<Direction> direction(cleaner_status_.size(), Direction::Up);	//各ユニットの移動状態を記述する
 		while (true) {
 			// 歩数制限・バック禁止以外のケースで皆が移動できない場合は弾く
 			bool can_move_flg = true;
 			// (...)
-			if (can_move_flg) {
+			for (auto &it : direction) {
+				cout << it << " ";
+			}
+			cout << endl;
+			/*if (can_move_flg) {
 				// 歩数制限・バック禁止以外のケースで皆が移動できる場合に限り移動を行う
 				// (...)
 				// 移動を行った後、クリア判定を行う
@@ -383,18 +395,31 @@ public:
 					// 範囲攻撃を計算する
 					vector<Floor> floor_back = floor_;
 					CleanCombo();
-					bool flg = Move(depth + 1, 0, combo_flg);
+					bool flg = Move2(depth + 1, combo_flg);
 					floor_ = floor_back;
 					return flg;
 				}
 				else {
-					return Move(depth + 1, 0, combo_flg);
+					return Move2(depth + 1, combo_flg);
 				}
-			}
+			}*/
 			// インクリメント処理
-			// (...)
-			break;
+			if (direction[0] != Direction::Max) {
+				direction[0] = static_cast<Direction>(direction[0] + 1);
+			}
+			else {
+				bool increment_flg = false;
+				for (auto it = direction.begin() + 1; it != direction.end(); ++it) {
+					if (*it == Direction::Max) continue;
+					std::fill(direction.begin(), it, Direction::Up);
+					*it = static_cast<Direction>(*it + 1);
+					increment_flg = true;
+					break;
+				}
+				if (!increment_flg) break;
+			}
 		}
+		return false;
 	}
 	// 解答を表示する
 	void ShowAnswer() {
@@ -433,6 +458,7 @@ int main(int argc, char *argv[]){
 	const auto process_begin_time = std::chrono::high_resolution_clock::now();
 	bool flg = query.Move(0, 0, false);
 	auto process_end_time = std::chrono::high_resolution_clock::now();
+	query.Move2(0, false);
 	if (!flg) {
 		cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
 		flg = query.Move(0, 0, true);
