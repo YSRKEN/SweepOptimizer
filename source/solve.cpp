@@ -16,17 +16,22 @@ using std::string;
 using std::vector;
 
 enum Floor : size_t{
-	Dirty,		//拭かれていない床
-	Clean,		//拭いた床
-	Boy,		//男の子
-	Girl,		//女の子
-	Robot,		//ロボット
-	Pool,		//水たまり(男の子しか処理できない)
-	Apple,		//リンゴ(女の子しか処理できない)
-	Bottle,		//ビン(ロボットしか処理できない)
-	DustBox,	//ゴミ箱(リンゴの捨て場所)
-	RecycleBox,	//リサイクル箱(ビンの捨て場所)
-	Obstacle,	//障害物
+	Dirty        = 1,	//拭かれていない床
+	Clean        = 2,	//拭いた床
+	Boy          = 4,	//男の子
+	Girl         = 8,	//女の子
+	Robot       = 16,	//ロボット
+	Pool        = 32,	//水たまり(男の子しか処理できない)
+	Apple       = 64,	//リンゴ(女の子しか処理できない)
+	Bottle     = 128,	//ビン(ロボットしか処理できない)
+	DustBox    = 256,	//ゴミ箱(リンゴの捨て場所)
+	RecycleBox = 512,	//リサイクル箱(ビンの捨て場所)
+	Obstacle  = 1024,	//障害物
+	Types = 11,			//種類数
+	// 移動可能な場所
+	CanMoveFlg = Dirty | Clean | Boy | Girl | Robot | Pool | Apple | Bottle,
+	// 掃除しなければならない場所
+	MustCleanFlg = Dirty | Pool | Apple | Bottle,
 };
 
 struct Status {
@@ -41,6 +46,15 @@ struct Status {
 };
 
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
+const std::array<Floor, Floor::Types> floor_types{ Floor::Dirty,Floor::Clean,Floor::Boy,Floor::Girl,Floor::Robot,Floor::Pool,Floor::Apple,Floor::Bottle,Floor::DustBox,Floor::RecycleBox,Floor::Obstacle };
+
+inline bool CanMoveFloor(const Floor floor) noexcept {
+	return (floor & Floor::CanMoveFlg) != 0;
+}
+
+inline bool MustCleanFloor(const Floor floor) noexcept {
+	return (floor & Floor::MustCleanFlg) != 0;
+}
 
 class Query{
 	// 盤面サイズ
@@ -74,18 +88,19 @@ public:
 			for (size_t i = 0; i < x; ++i) {
 				size_t temp;
 				fin >> temp;
+				if (temp >= Floor::Types) temp = Floor::Obstacle;
 				size_t k = (j + 1) * x_ + (i + 1);
-				switch (floor_[k] = static_cast<Floor>(temp)) {
+				switch (floor_[k] = floor_types[temp]) {
 				case Floor::Boy:
-					cleaner_status_temp[Floor::Boy - Floor::Boy].push_back(Status{ Floor::Boy, 0, 0, k, k, k, 0});
+					cleaner_status_temp[0].push_back(Status{ Floor::Boy, 0, 0, k, k, k, 0});
 					floor_[k] = Floor::Clean;
 					break;
 				case Floor::Girl:
-					cleaner_status_temp[Floor::Girl - Floor::Boy].push_back(Status{ Floor::Girl, 0, 0, k, k,k, 0 });
+					cleaner_status_temp[1].push_back(Status{ Floor::Girl, 0, 0, k, k,k, 0 });
 					floor_[k] = Floor::Clean;
 					break;
 				case Floor::Robot:
-					cleaner_status_temp[Floor::Robot - Floor::Boy].push_back(Status{ Floor::Robot, 0, 0, k, k,k, 0 });
+					cleaner_status_temp[2].push_back(Status{ Floor::Robot, 0, 0, k, k,k, 0 });
 					floor_[k] = Floor::Clean;
 					break;
 				default:
@@ -124,11 +139,11 @@ public:
 		for (size_t iy = 1; iy <= y; ++iy) {
 			for (size_t ix = 1; ix <= x; ++ix) {
 				size_t i = iy * x_ + ix;
-				if (floor_[i] > Floor::Bottle) continue;
+				if (!CanMoveFloor(floor_[i])) continue;
 				for (size_t jy = 1; jy <= y; ++jy) {
 					for (size_t jx = 1; jx <= x; ++jx) {
 						size_t j = jy * x_ + jx;
-						if (floor_[j] > Floor::Bottle) continue;
+						if (!CanMoveFloor(floor_[j])) continue;
 						if (i == j) {
 							 min_cost_[i][j] = 0;
 							continue;
@@ -156,20 +171,63 @@ public:
 	// 盤面表示
 	void Put() const noexcept{
 		cout << "横" << x_mini_ << "マス,縦" << y_mini_ << "マス" << endl;
-		const static string kStatusStr[] = {"□", "×", "♂", "♀", "Ｒ", "水", "実", "瓶", "ゴ", "リ", "■"};
 		for(size_t j = 1; j <= y_mini_; ++j){
 			for(size_t i = 1; i <= x_mini_; ++i){
-				cout << kStatusStr[floor_[j * x_ + i]];
+				switch (floor_[j * x_ + i]) {
+				case Floor::Dirty:
+					cout << "□";
+					break;
+				case Floor::Clean:
+					cout << "×";
+					break;
+				case Floor::Boy:
+					cout << "♂";
+					break;
+				case Floor::Girl:
+					cout << "♀";
+					break;
+				case Floor::Robot:
+					cout << "Ｒ";
+					break;
+				case Floor::Pool:
+					cout << "水";
+					break;
+				case Floor::Apple:
+					cout << "実";
+					break;
+				case Floor::Bottle:
+					cout << "瓶";
+					break;
+				case Floor::DustBox:
+					cout << "ゴ";
+					break;
+				case Floor::RecycleBox:
+					cout << "リ";
+					break;
+				case Floor::Obstacle:
+					cout << "■";
+					break;
+				}
 			}
 			cout << endl;
 		}
-		const static string kCleanerTypeStr[] = {"男の子", "女の子", "Robot"};
 		for (auto &it_c : cleaner_status_) {
 			auto type = it_c.type_;
 			auto position = it_c.position_now_;
 			auto move_now = it_c.move_now_;
 			auto move_max = it_c.move_max_;
-			cout << kCleanerTypeStr[type - Floor::Boy] << GetPos(position) << "(" << move_now << "/" << move_max << ")歩 ";
+			switch (type) {
+			case Floor::Boy:
+				cout << "男の子";
+				break;
+			case Floor::Girl:
+				cout << "女の子";
+				break;
+			case Floor::Robot:
+				cout << "Robot";
+				break;
+			}
+			cout << GetPos(position) << "(" << move_now << "/" << move_max << ")歩 ";
 		}
 		cout << endl;
 	}
@@ -178,15 +236,7 @@ public:
 		for (size_t j = 1; j <= y_mini_; ++j) {
 			for (size_t i = 1; i <= x_mini_; ++i) {
 				size_t k = j * x_ + i;
-				switch (floor_[k]) {
-				case Floor::Dirty:
-				case Floor::Pool:
-				case Floor::Apple:
-				case Floor::Bottle:
-					return false;
-				default:
-					break;
-				}
+				if (MustCleanFloor(floor_[k])) return false;
 			}
 		}
 		for (auto &it_c : cleaner_status_) {
@@ -201,7 +251,7 @@ public:
 				const size_t position = j * x_ + i;
 				// 拭かなくてもいいマスは無視する
 				auto &cell = floor_[position];
-				if (cell != Floor::Dirty && cell != Floor::Pool && cell != Floor::Apple && cell != Floor::Bottle) continue;
+				if (!MustCleanFloor(cell)) continue;
 				// 拭く必要がある場合は調査する
 				bool can_move_flg = false;
 				for (const auto &it_c : cleaner_status_) {
@@ -226,7 +276,7 @@ public:
 				const size_t position = j * x_ + i;
 				// 拭かなくてもいいマスは無視する
 				auto &cell = floor_[position];
-				if (cell != Floor::Dirty && cell != Floor::Pool && cell != Floor::Apple && cell != Floor::Bottle) continue;
+				if (!MustCleanFloor(cell)) continue;
 				// 拭く必要がある場合は調査する
 				bool can_move_flg = false;
 				for (const auto &it_c : cleaner_status_) {
@@ -328,7 +378,7 @@ public:
 				if (next_position == it_c.position_old_) continue;
 				// 障害物は乗り越えられない
 				auto &floor_ref = floor_[next_position];
-				if (floor_ref > Floor::Bottle) continue;
+				if (!CanMoveFloor(floor_ref)) continue;
 				// 移動を行う
 				//現在座標
 				it_c.position_now_ = next_position;
@@ -392,7 +442,7 @@ public:
 				if (next_position == it_c.position_old_) continue;
 				// 障害物は乗り越えられない
 				auto &floor_ref = floor_[next_position];
-				if (floor_ref > Floor::Bottle) continue;
+				if (!CanMoveFloor(floor_ref)) continue;
 				// 移動を行う
 				//現在座標
 				it_c.position_now_ = next_position;
@@ -438,9 +488,19 @@ public:
 	}
 	// 解答を表示する
 	void ShowAnswer() {
-		const static string kCleanerTypeStr[] = { "男の子", "女の子", "Robot" };
 		for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
-			cout << kCleanerTypeStr[cleaner_status_[ci].type_ - Floor::Boy] << " " << GetPos(cleaner_status_[ci].position_first_);
+			switch (cleaner_status_[ci].type_) {
+			case Floor::Boy:
+				cout << "男の子";
+				break;
+			case Floor::Girl:
+				cout << "女の子";
+				break;
+			case Floor::Robot:
+				cout << "Robot";
+				break;
+			}
+			cout << " " << GetPos(cleaner_status_[ci].position_first_);
 			size_t old_position = cleaner_status_[ci].position_first_;
 			size_t count = 0;
 			for (auto it_m : cleaner_move_[ci]) {
