@@ -37,6 +37,7 @@ struct Status {
 	size_t position_old_;	//過去の位置
 	size_t position_first_;	//最初の位置
 	size_t stock_;			//リンゴ・ビンの所持数
+	size_t move_max_combo_;		//最大歩数(コンボ用)
 };
 
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
@@ -44,6 +45,7 @@ const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・
 class Query{
 	// 盤面サイズ
 	size_t x_, y_;
+	size_t x_mini_, y_mini_;
 	// 床の状態
 	vector<Floor> floor_;
 	// 掃除人の種類・現在の歩数・最大歩数・現在の位置・過去の位置
@@ -54,6 +56,7 @@ class Query{
 	vector<std::list<size_t>> cleaner_move_;
 	// マスA→マスBへの最小移動歩数
 	vector<vector<size_t>> min_cost_;
+	vector<vector<size_t>> min_cost_combo_;
 public:
 	// コンストラクタ
 	Query(const char file_name[]){
@@ -61,6 +64,7 @@ public:
 		// 盤面サイズを読み込む
 		size_t x, y;
 		fin >> x >> y;
+		x_mini_ = x; y_mini_ = y;
 		x_ = x + 2; y_ = y + 2;	//番兵用に拡張する
 		floor_.resize(x_ * y_, Floor::Obstacle);
 		// 盤面データを読み込み、反映させる
@@ -101,6 +105,7 @@ public:
 			for(size_t ci = 0; ci < cleaner_status_temp[ti].size(); ++ci){
 				fin >> temp;
 				cleaner_status_temp[ti][ci].move_max_ = temp;
+				cleaner_status_temp[ti][ci].move_max_combo_ = temp + 2;
 				max_depth_ = std::max(max_depth_, temp);
 			}
 		}
@@ -150,10 +155,10 @@ public:
 	}
 	// 盤面表示
 	void Put() const noexcept{
-		cout << "横" << (x_ - 2) << "マス,縦" << (y_ - 2) << "マス" << endl;
+		cout << "横" << x_mini_ << "マス,縦" << y_mini_ << "マス" << endl;
 		const static string kStatusStr[] = {"□", "×", "♂", "♀", "Ｒ", "水", "実", "瓶", "ゴ", "リ", "■"};
-		for(size_t j = 1; j < y_ - 1; ++j){
-			for(size_t i = 1; i < x_ - 1; ++i){
+		for(size_t j = 1; j <= y_mini_; ++j){
+			for(size_t i = 1; i <= x_mini_; ++i){
 				cout << kStatusStr[floor_[j * x_ + i]];
 			}
 			cout << endl;
@@ -170,8 +175,8 @@ public:
 	}
 	// 終了判定
 	bool Sweeped() {
-		for (size_t j = 1; j < y_ - 1; ++j) {
-			for (size_t i = 1; i < x_ - 1; ++i) {
+		for (size_t j = 1; j <= y_mini_; ++j) {
+			for (size_t i = 1; i <= x_mini_; ++i) {
 				size_t k = j * x_ + i;
 				switch (floor_[k]) {
 				case Floor::Dirty:
@@ -191,8 +196,8 @@ public:
 	}
 	// 現状では拭ききれない場合はfalse(nは許容量)
 	bool CanMoveWithCombo() const noexcept {
-		for (size_t j = 1; j < y_ - 1; ++j) {
-			for (size_t i = 1; i < x_ - 1; ++i) {
+		for (size_t j = 1; j <= y_mini_; ++j) {
+			for (size_t i = 1; i <= x_mini_; ++i) {
 				const size_t position = j * x_ + i;
 				// 拭かなくてもいいマスは無視する
 				auto &cell = floor_[position];
@@ -200,7 +205,7 @@ public:
 				// 拭く必要がある場合は調査する
 				bool can_move_flg = false;
 				for (const auto &it_c : cleaner_status_) {
-					if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_ + 2) {
+					if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_combo_) {
 						if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
 							|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
 							|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
@@ -216,8 +221,8 @@ public:
 		return true;
 	}
 	bool CanMoveNonCombo() const noexcept {
-		for (size_t j = 1; j < y_ - 1; ++j) {
-			for (size_t i = 1; i < x_ - 1; ++i) {
+		for (size_t j = 1; j <= y_mini_; ++j) {
+			for (size_t i = 1; i <= x_mini_; ++i) {
 				const size_t position = j * x_ + i;
 				// 拭かなくてもいいマスは無視する
 				auto &cell = floor_[position];
