@@ -41,10 +41,11 @@ struct Status {
 
 enum Direction : size_t {
 	Up,
+	Left,
 	Right,
 	Down,
-	Left,
-	Max = Left
+	Kinds,
+	Max = Down
 };
 
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
@@ -62,6 +63,8 @@ class Query{
 	vector<std::list<size_t>> cleaner_move_;
 	// マスA→マスBへの最小移動歩数
 	vector<vector<size_t>> min_cost_;
+	// 移動時のオフセット
+	std::array<int, Direction::Kinds> offset;
 public:
 	// コンストラクタ
 	Query(const char file_name[]){
@@ -71,6 +74,7 @@ public:
 		fin >> x >> y;
 		x_ = x + 2; y_ = y + 2;	//番兵用に拡張する
 		floor_.resize(x_ * y_, Floor::Obstacle);
+		offset = {-int(x_), -1, 1, int(x_)};
 		// 盤面データを読み込み、反映させる
 		vector<vector<Status>> cleaner_status_temp;
 		cleaner_status_temp.resize(kCleanerTypes);
@@ -369,40 +373,47 @@ public:
 		while (true) {
 			// 歩数制限・バック禁止以外のケースで皆が移動できない場合は弾く
 			bool can_move_flg = true;
-			// (...)
-			for (auto &it : direction) {
-				cout << it << " ";
+			for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
+				if (floor_[cleaner_status_[ci].position_now_ + offset[direction[ci]]] > Floor::Bottle) {
+					can_move_flg = false;
+					break;
+				}
 			}
-			cout << endl;
-			/*if (can_move_flg) {
+			if(can_move_flg){
+				for (auto &it : direction) {
+					cout << it << " ";
+				}
+				cout << endl;
+				/*if (can_move_flg) {
 				// 歩数制限・バック禁止以外のケースで皆が移動できる場合に限り移動を行う
 				// (...)
 				// 移動を行った後、クリア判定を行う
 				if (depth >= max_depth_) {
-					// 盤面が埋まっているかをチェックする
-					if (Sweeped()) {
-						Put();
-						return true;
-					}
-					else {
-						return false;
-					}
+				// 盤面が埋まっているかをチェックする
+				if (Sweeped()) {
+				Put();
+				return true;
+				}
+				else {
+				return false;
+				}
 				}
 				// min_cost_による枝刈りを行う
 				if (!CanMove(combo_flg)) return false;
 				// 鉢合わせることによる範囲攻撃を判定する
 				if (combo_flg) {
-					// 範囲攻撃を計算する
-					vector<Floor> floor_back = floor_;
-					CleanCombo();
-					bool flg = Move2(depth + 1, combo_flg);
-					floor_ = floor_back;
-					return flg;
+				// 範囲攻撃を計算する
+				vector<Floor> floor_back = floor_;
+				CleanCombo();
+				bool flg = Move2(depth + 1, combo_flg);
+				floor_ = floor_back;
+				return flg;
 				}
 				else {
-					return Move2(depth + 1, combo_flg);
+				return Move2(depth + 1, combo_flg);
 				}
-			}*/
+				}*/
+			}
 			// インクリメント処理
 			if (direction[0] != Direction::Max) {
 				direction[0] = static_cast<Direction>(direction[0] + 1);
