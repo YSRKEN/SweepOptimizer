@@ -39,6 +39,18 @@ struct Status {
 	size_t stock_;			//リンゴ・ビンの所持数
 };
 
+enum Direction : size_t {
+	Up,
+	Left,
+	Right,
+	Down,
+	Kinds,
+	Max = Down
+};
+
+Direction operator++(Direction d) {
+	return static_cast<Direction>(static_cast<size_t>(d) + 1);
+}
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
 
 class Query{
@@ -54,15 +66,21 @@ class Query{
 	vector<std::list<size_t>> cleaner_move_;
 	// マスA→マスBへの最小移動歩数
 	vector<vector<size_t>> min_cost_;
+	// 移動時のオフセット
+	std::array<int, Direction::Kinds> offset;
+	// 解けたらtrue
+	bool solve_flg_;
 public:
 	// コンストラクタ
 	Query(const char file_name[]){
+		solve_flg_ = false;
 		std::ifstream fin(file_name);
 		// 盤面サイズを読み込む
 		size_t x, y;
 		fin >> x >> y;
 		x_ = x + 2; y_ = y + 2;	//番兵用に拡張する
 		floor_.resize(x_ * y_, Floor::Obstacle);
+		offset = {-int(x_), -1, 1, int(x_)};
 		// 盤面データを読み込み、反映させる
 		vector<vector<Status>> cleaner_status_temp;
 		cleaner_status_temp.resize(kCleanerTypes);
@@ -355,6 +373,93 @@ public:
 			return Move(depth + 1, 0, combo_flg);
 		}
 	}
+	// 探索ルーチンその2
+	bool Move2(const size_t depth, const bool combo_flg) {
+//		cout << depth << endl;
+		if (depth >= max_depth_) return Sweeped();
+		vector<Direction> direction(cleaner_status_.size(), Direction::Up);	//各ユニットの移動状態を記述する
+		auto first_not_max_it = direction.end();
+		while (true) {
+			// 歩数制限・バック禁止以外のケースで皆が移動できない場合は弾く
+			bool can_move_flg = true;
+			for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
+				if (floor_[cleaner_status_[ci].position_now_ + offset[direction[ci]]] > Floor::Bottle) {
+					can_move_flg = false;
+					break;
+				}
+			}
+			if(can_move_flg){
+//				for (auto &it : direction) cout << it << " "; cout << endl;
+				vector<Status> cleaner_status = cleaner_status_;
+				vector<Floor> floor = floor_;
+				// 歩数制限・バック禁止以外のケースで皆が移動できる場合に限り移動を行う
+				for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
+					auto &it_c = cleaner_status_[ci];
+					// 歩数制限
+					if (it_c.move_now_ == it_c.move_max_) continue;
+					// バック禁止
+					size_t next_position = cleaner_status_[ci].position_now_ + offset[direction[ci]];
+					if (next_position == it_c.position_old_) continue;
+					// 移動させる
+					it_c.position_old_ = it_c.position_now_;
+					it_c.position_now_ = next_position;
+					++it_c.move_now_;
+					CleanFloor(floor_[next_position], it_c);
+					it_c.stock_ = SurroundedBox(it_c);
+				}
+				// 鉢合わせた場合は範囲攻撃を行う
+				if (combo_flg) CleanCombo();
+				// 終了を判定する
+				if (Sweeped()) {
+					for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
+						cleaner_move_[ci].push_front(cleaner_status_[ci].position_now_);
+					}
+					solve_flg_ = true;
+					Put();
+					// 操作を元に戻す
+					cleaner_status_ = std::move(cleaner_status);
+					floor_ = std::move(floor);
+					return true;
+				}else{
+					// 終了してないので再帰を1段深くする
+					if (!CanMove(combo_flg)) {
+						// 操作を元に戻す
+						cleaner_status_ = std::move(cleaner_status);
+						floor_ = std::move(floor);
+						return false;
+					}
+					bool flg = Move2(depth + 1, combo_flg);
+					if (flg) {
+						for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
+							cleaner_move_[ci].push_front(cleaner_status_[ci].position_now_);
+						}
+						// 操作を元に戻す
+						cleaner_status_ = std::move(cleaner_status);
+						floor_ = std::move(floor);
+						return true;
+					}
+					else {
+						// 操作を元に戻す
+						cleaner_status_ = std::move(cleaner_status);
+						floor_ = std::move(floor);
+					}
+				}
+			}
+			// インクリメント処理
+			//インクリメント処理
+			if (direction[0] != Direction::Max) {
+				++direction[0];
+			}
+			else if (direction.end() != (first_not_max_it = std::find_if_not(direction.begin() + 1, direction.end(), [](Direction d) { return d == Direction::Max; }))) {
+				break;
+			}
+		}
+		if (direction.end() != first_not_max_it) {
+			std::fill(direction.begin(), first_not_max_it, Direction::Up);
+			++*first_not_max_it;
+		}
+		return solve_flg_;
+	}
 	// 解答を表示する
 	void ShowAnswer() {
 		const static string kCleanerTypeStr[] = { "男の子", "女の子", "Robot" };
@@ -387,17 +492,32 @@ public:
 
 int main(int argc, char *argv[]){
 	if(argc < 2) return -1;
-	Query query(argv[1]);
-	query.Put();
-	const auto process_begin_time = std::chrono::high_resolution_clock::now();
-	bool flg = query.Move(0, 0, false);
-	auto process_end_time = std::chrono::high_resolution_clock::now();
-	if (!flg) {
-		cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
-		flg = query.Move(0, 0, true);
-		process_end_time = std::chrono::high_resolution_clock::now();
+	{
+		Query query(argv[1]);
+		query.Put();
+		const auto process_begin_time = std::chrono::high_resolution_clock::now();
+		bool flg = query.Move(0, 0, false);
+		auto process_end_time = std::chrono::high_resolution_clock::now();
+		if (!flg) {
+			cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
+			flg = query.Move(0, 0, true);
+			process_end_time = std::chrono::high_resolution_clock::now();
+		}
+		if (flg) query.ShowAnswer();
+		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
 	}
-	if (flg) query.ShowAnswer();
-	cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
+	{
+		Query query(argv[1]);
+		const auto process_begin_time = std::chrono::high_resolution_clock::now();
+		bool flg = query.Move2(0, false);
+		auto process_end_time = std::chrono::high_resolution_clock::now();
+		if (!flg) {
+			cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
+			flg = query.Move2(0, true);
+			process_end_time = std::chrono::high_resolution_clock::now();
+		}
+		if (flg) query.ShowAnswer();
+		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
+	}
 	return 0;
 }
