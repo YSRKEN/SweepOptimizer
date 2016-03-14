@@ -355,6 +355,47 @@ public:
 			return Move(depth + 1, 0, combo_flg);
 		}
 	}
+	// 探索ルーチンその2
+	bool Move2(const size_t depth, const size_t index, const bool combo_flg) {
+		vector<size_t> direction(cleaner_status_.size(), 0);	//各ユニットの移動状態を記述する
+		while (true) {
+			// 歩数制限・バック禁止以外のケースで皆が移動できない場合は弾く
+			bool can_move_flg = true;
+			// (...)
+			if (can_move_flg) {
+				// 歩数制限・バック禁止以外のケースで皆が移動できる場合に限り移動を行う
+				// (...)
+				// 移動を行った後、クリア判定を行う
+				if (depth >= max_depth_) {
+					// 盤面が埋まっているかをチェックする
+					if (Sweeped()) {
+						Put();
+						return true;
+					}
+					else {
+						return false;
+					}
+				}
+				// min_cost_による枝刈りを行う
+				if (!CanMove(combo_flg)) return false;
+				// 鉢合わせることによる範囲攻撃を判定する
+				if (combo_flg) {
+					// 範囲攻撃を計算する
+					vector<Floor> floor_back = floor_;
+					CleanCombo();
+					bool flg = Move(depth + 1, 0, combo_flg);
+					floor_ = floor_back;
+					return flg;
+				}
+				else {
+					return Move(depth + 1, 0, combo_flg);
+				}
+			}
+			// インクリメント処理
+			// (...)
+			break;
+		}
+	}
 	// 解答を表示する
 	void ShowAnswer() {
 		const static string kCleanerTypeStr[] = { "男の子", "女の子", "Robot" };
