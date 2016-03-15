@@ -189,7 +189,7 @@ public:
 		}
 	}
 	// ヘルパー関数
-	string GetPos(const size_t position) const noexcept{
+	string GetPos(const size_t position) const{
 		return "[" + std::to_string(position % x_ - 1) + "," + std::to_string(position / x_ - 1) + "]";
 	}
 	// 盤面表示
