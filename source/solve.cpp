@@ -61,7 +61,6 @@ inline bool MustCleanFloor(const Floor floor) noexcept {
 
 // 並列処理用
 size_t g_threads = 1;
-constexpr size_t kMaxThreads = 8;
 std::mutex g_mutex;
 bool g_solved_flg = false;
 
@@ -82,9 +81,12 @@ class Query{
 	vector<vector<size_t>> min_cost_combo_;	//コンボ用なので上限が緩い
 	// 周囲にゴミ箱/リサイクル箱があったらtrue
 	vector<char> near_dustbox_, near_recyclebox_;
+	// 実行時のスレッド数
+	size_t max_threads_;
 public:
 	// コンストラクタ
-	Query(const char file_name[]){
+	Query(const char file_name[], const size_t max_threads){
+		max_threads_ = max_threads;
 		std::ifstream fin;
 		fin.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 		fin.open(file_name);
@@ -412,7 +414,7 @@ public:
 			if (it_c.move_now_ == it_c.move_max_) continue;
 			const auto position = it_c.position_now_;
 			// 上下左右の動きについて議論する
-			if (g_threads < kMaxThreads) {
+			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
 				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
 					// すぐ前に行った場所にバックするのは禁じられている
@@ -509,7 +511,7 @@ public:
 			if (it_c.move_now_ == it_c.move_max_) continue;
 			const auto position = it_c.position_now_;
 			// 上下左右の動きについて議論する
-			if (g_threads < kMaxThreads) {
+			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
 				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
 					// すぐ前に行った場所にバックするのは禁じられている
@@ -633,7 +635,12 @@ public:
 
 int main(int argc, char *argv[]){
 	if(argc < 2) return -1;
-	Query query(argv[1]);
+	int max_threads = 1;
+	if (argc >= 3) {
+		max_threads = std::stoi(argv[2]);
+		if (max_threads < 1) max_threads = 1;
+	}
+	Query query(argv[1], max_threads);
 	query.Put();
 	const auto process_begin_time = std::chrono::high_resolution_clock::now();
 	bool flg = query.MoveNonCombo(0, 0);
