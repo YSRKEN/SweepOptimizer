@@ -76,7 +76,9 @@ class Query{
 public:
 	// コンストラクタ
 	Query(const char file_name[]){
-		std::ifstream fin(file_name);
+		std::ifstream fin;
+		fin.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+		fin.open(file_name);
 		// 盤面サイズを読み込む
 		size_t x, y;
 		fin >> x >> y;
