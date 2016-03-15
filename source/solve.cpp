@@ -61,7 +61,7 @@ inline bool MustCleanFloor(const Floor floor) noexcept {
 
 // 並列処理用
 size_t g_threads = 1;
-const size_t kMaxThreads = 8;
+constexpr size_t kMaxThreads = 8;
 std::mutex g_mutex;
 
 class Query{
@@ -478,18 +478,18 @@ public:
 				vector<Query> query_back(next_position.size(), *this);
 				g_mutex.lock(); g_threads += next_position.size() - 1; g_mutex.unlock();
 				for (size_t di = 0; di < next_position.size(); ++di) {
-					result[di] = std::async(std::launch::async, [&] {
+					result[di] = std::async(std::launch::async, [this, &it_c, next_position, ci, di, &query_back, depth] {
 						const auto old_position = it_c.position_old_;
 						const auto old_stock = it_c.stock_;
 						const auto old_floor = floor_[next_position[di]];
 						query_back[di].MoveCleanerForward(ci, next_position[di]);
 						// 移動処理
-						if (query_back[di].MoveNonCombo(depth, ci + 1)) {
-							query_back[di].cleaner_move_[ci].push_front(next_position[di]);
-							return true;
-						}
-						return false;
+						if (!query_back[di].MoveNonCombo(depth, ci + 1)) return false;
+						query_back[di].cleaner_move_[ci].push_front(next_position[di]);
+						return true;
 					});
+				}
+				for (size_t di = 0; di < next_position.size(); ++di) {
 					result_get[di] = result[di].get();
 				}
 				g_mutex.lock(); g_threads -= next_position.size() - 1; g_mutex.unlock();
