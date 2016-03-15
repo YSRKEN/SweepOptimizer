@@ -376,6 +376,22 @@ public:
 			break;
 		}
 	}
+	// 指定地点へ移動させる
+	void MoveCleanerForward(const size_t ci, const size_t next_position) noexcept{
+		auto &it_c = cleaner_status_[ci];
+		auto &floor_ref = floor_[next_position];
+		it_c.position_old_ = it_c.position_now_;
+		it_c.position_now_ = next_position;
+		++it_c.move_now_;
+		it_c.stock_ = SurroundedBox(it_c);
+		CleanFloor(floor_ref, it_c);
+	}
+	// 手を戻す
+	void MoveCleanerBack(const size_t ci, const size_t next_position) noexcept{
+		auto &it_c = cleaner_status_[ci];
+		it_c.position_now_ = it_c.position_old_;
+		--it_c.move_now_;
+	}
 	// 探索ルーチン
 	bool MoveWithCombo(const size_t depth, const size_t index) {
 		// 全員を1歩だけ進める＝depthと等しい歩数の掃除人がいない
@@ -394,30 +410,21 @@ public:
 				auto &floor_ref = floor_[next_position];
 				if (!CanMoveFloor(floor_ref)) continue;
 				// 移動を行う
-				//現在座標
-				it_c.position_now_ = next_position;
-				//移動後の床の状態
-				const auto old_floor = floor_ref;
-				CleanFloor(floor_ref, it_c);
-				//歩数カウント
-				++it_c.move_now_;
-				//前回の座標
 				const auto old_position = it_c.position_old_;
-				it_c.position_old_ = position;
-				//前回のストック数
+				const auto old_floor = floor_ref;
 				const auto old_stock = it_c.stock_;
-				it_c.stock_ = SurroundedBox(it_c);
-				//移動処理
+				MoveCleanerForward(ci, next_position);
+				// 移動処理
 				move_flg = true;
 				if (MoveWithCombo(depth, ci + 1)) {
 					cleaner_move_[ci].push_front(next_position);
 					return true;
 				}
-				it_c.stock_ = old_stock;
+				// 元に戻す
+				MoveCleanerBack(ci, next_position);
 				it_c.position_old_ = old_position;
-				--it_c.move_now_;
 				floor_ref = old_floor;
-				it_c.position_now_ = position;
+				it_c.stock_ = old_stock;
 			}
 			return false;
 		}
@@ -458,30 +465,21 @@ public:
 				auto &floor_ref = floor_[next_position];
 				if (!CanMoveFloor(floor_ref)) continue;
 				// 移動を行う
-				//現在座標
-				it_c.position_now_ = next_position;
-				//移動後の床の状態
-				const auto old_floor = floor_ref;
-				CleanFloor(floor_ref, it_c);
-				//歩数カウント
-				++it_c.move_now_;
-				//前回の座標
 				const auto old_position = it_c.position_old_;
-				it_c.position_old_ = position;
-				//前回のストック数
+				const auto old_floor = floor_ref;
 				const auto old_stock = it_c.stock_;
-				it_c.stock_ = SurroundedBox(it_c);
-				//移動処理
+				MoveCleanerForward(ci, next_position);
+				// 移動処理
 				move_flg = true;
 				if (MoveNonCombo(depth, ci + 1)) {
 					cleaner_move_[ci].push_front(next_position);
 					return true;
 				}
-				it_c.stock_ = old_stock;
+				// 元に戻す
+				MoveCleanerBack(ci, next_position);
 				it_c.position_old_ = old_position;
-				--it_c.move_now_;
 				floor_ref = old_floor;
-				it_c.position_now_ = position;
+				it_c.stock_ = old_stock;
 			}
 			return false;
 		}
