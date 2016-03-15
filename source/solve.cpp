@@ -7,7 +7,10 @@
 #include <iostream>
 #include <list>
 #include <string>
+#include <future>
+#include <mutex>
 #include <tuple>
+#include <deque>
 #include <vector>
 
 using std::cout;
@@ -55,6 +58,12 @@ inline bool CanMoveFloor(const Floor floor) noexcept {
 inline bool MustCleanFloor(const Floor floor) noexcept {
 	return (floor & Floor::MustCleanFlg) != 0;
 }
+
+// 並列処理用
+size_t g_threads = 1;
+constexpr size_t kMaxThreads = 8;
+std::mutex g_mutex;
+bool g_solved_flg = false;
 
 class Query{
 	// 盤面サイズ
@@ -189,7 +198,7 @@ public:
 		}
 	}
 	// ヘルパー関数
-	string GetPos(const size_t position) const noexcept{
+	string GetPos(const size_t position) const{
 		return "[" + std::to_string(position % x_ - 1) + "," + std::to_string(position / x_ - 1) + "]";
 	}
 	// 盤面表示
@@ -376,10 +385,26 @@ public:
 			break;
 		}
 	}
+	// 指定地点へ移動させる
+	void MoveCleanerForward(const size_t ci, const size_t next_position) noexcept{
+		auto &it_c = cleaner_status_[ci];
+		auto &floor_ref = floor_[next_position];
+		it_c.position_old_ = it_c.position_now_;
+		it_c.position_now_ = next_position;
+		++it_c.move_now_;
+		it_c.stock_ = SurroundedBox(it_c);
+		CleanFloor(floor_ref, it_c);
+	}
+	// 手を戻す
+	void MoveCleanerBack(const size_t ci, const size_t next_position) noexcept{
+		auto &it_c = cleaner_status_[ci];
+		it_c.position_now_ = it_c.position_old_;
+		--it_c.move_now_;
+	}
 	// 探索ルーチン
 	bool MoveWithCombo(const size_t depth, const size_t index) {
+		if (g_solved_flg) return false;
 		// 全員を1歩だけ進める＝depthと等しい歩数の掃除人がいない
-		bool move_flg = false;
 		for (size_t ci = index; ci < cleaner_status_.size(); ++ci) {
 			auto &it_c = cleaner_status_[ci];
 			// 歩を進めるべきではない掃除人は飛ばす
@@ -387,37 +412,67 @@ public:
 			if (it_c.move_now_ == it_c.move_max_) continue;
 			const auto position = it_c.position_now_;
 			// 上下左右の動きについて議論する
-			for (const auto next_position : { position - x_ , position - 1, position + 1, position + x_ }) {
-				// すぐ前に行った場所にバックするのは禁じられている
-				if (next_position == it_c.position_old_) continue;
-				// 障害物は乗り越えられない
-				auto &floor_ref = floor_[next_position];
-				if (!CanMoveFloor(floor_ref)) continue;
-				// 移動を行う
-				//現在座標
-				it_c.position_now_ = next_position;
-				//移動後の床の状態
-				const auto old_floor = floor_ref;
-				CleanFloor(floor_ref, it_c);
-				//歩数カウント
-				++it_c.move_now_;
-				//前回の座標
-				const auto old_position = it_c.position_old_;
-				it_c.position_old_ = position;
-				//前回のストック数
-				const auto old_stock = it_c.stock_;
-				it_c.stock_ = SurroundedBox(it_c);
-				//移動処理
-				move_flg = true;
-				if (MoveWithCombo(depth, ci + 1)) {
-					cleaner_move_[ci].push_front(next_position);
-					return true;
+			if (g_threads < kMaxThreads) {
+				vector<size_t> next_position;
+				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
+					// すぐ前に行った場所にバックするのは禁じられている
+					if (next_position_ == it_c.position_old_) continue;
+					// 障害物は乗り越えられない
+					auto &floor_ref = floor_[next_position_];
+					if (!CanMoveFloor(floor_ref)) continue;
+					next_position.push_back(next_position_);
 				}
-				it_c.stock_ = old_stock;
-				it_c.position_old_ = old_position;
-				--it_c.move_now_;
-				floor_ref = old_floor;
-				it_c.position_now_ = position;
+				vector<std::future<bool>> result(next_position.size());
+				std::deque<bool> result_get(next_position.size());
+				vector<Query> query_back(next_position.size(), *this);
+				g_mutex.lock(); g_threads += next_position.size() - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position.size(); ++di) {
+					result[di] = std::async(std::launch::async, [this, &it_c, next_position, ci, di, &query_back, depth] {
+						const auto old_position = it_c.position_old_;
+						const auto old_stock = it_c.stock_;
+						const auto old_floor = floor_[next_position[di]];
+						query_back[di].MoveCleanerForward(ci, next_position[di]);
+						// 移動処理
+						if (!query_back[di].MoveWithCombo(depth, ci + 1)) return false;
+						query_back[di].cleaner_move_[ci].push_front(next_position[di]);
+						return true;
+					});
+				}
+				for (size_t di = 0; di < next_position.size(); ++di) {
+					result_get[di] = result[di].get();
+				}
+				g_mutex.lock(); g_threads -= next_position.size() - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position.size(); ++di) {
+					if (result_get[di]) {
+						*this = std::move(query_back[di]);
+						return true;
+					}
+				}
+				return false;
+			}
+			else {
+				for (const auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+					// すぐ前に行った場所にバックするのは禁じられている
+					if (next_position == it_c.position_old_) continue;
+					// 障害物は乗り越えられない
+					auto &floor_ref = floor_[next_position];
+					if (!CanMoveFloor(floor_ref)) continue;
+					// 移動を行う
+					const auto old_position = it_c.position_old_;
+					const auto old_floor = floor_ref;
+					const auto old_stock = it_c.stock_;
+					MoveCleanerForward(ci, next_position);
+					// 移動処理
+					if (MoveWithCombo(depth, ci + 1)) {
+						cleaner_move_[ci].push_front(next_position);
+						return true;
+					}
+					// 元に戻す
+					MoveCleanerBack(ci, next_position);
+					it_c.position_old_ = old_position;
+					floor_ref = old_floor;
+					it_c.stock_ = old_stock;
+				}
 			}
 			return false;
 		}
@@ -425,7 +480,10 @@ public:
 		if (depth >= max_depth_) {
 			// 盤面が埋まっているかをチェックする
 			if (Sweeped()) {
-				Put();
+				g_mutex.lock();
+				//Put();
+				g_solved_flg = true;
+				g_mutex.unlock();
 				return true;
 			}
 			else {
@@ -442,8 +500,8 @@ public:
 		return flg;
 	}
 	bool MoveNonCombo(const size_t depth, const size_t index){
+		if (g_solved_flg) return false;
 		// 全員を1歩だけ進める＝depthと等しい歩数の掃除人がいない
-		bool move_flg = false;
 		for(size_t ci = index; ci < cleaner_status_.size(); ++ci){
 			auto &it_c = cleaner_status_[ci];
 			// 歩を進めるべきではない掃除人は飛ばす
@@ -451,37 +509,67 @@ public:
 			if (it_c.move_now_ == it_c.move_max_) continue;
 			const auto position = it_c.position_now_;
 			// 上下左右の動きについて議論する
-			for (const auto next_position : { position - x_ , position - 1, position + 1, position + x_ }) {
-				// すぐ前に行った場所にバックするのは禁じられている
-				if (next_position == it_c.position_old_) continue;
-				// 障害物は乗り越えられない
-				auto &floor_ref = floor_[next_position];
-				if (!CanMoveFloor(floor_ref)) continue;
-				// 移動を行う
-				//現在座標
-				it_c.position_now_ = next_position;
-				//移動後の床の状態
-				const auto old_floor = floor_ref;
-				CleanFloor(floor_ref, it_c);
-				//歩数カウント
-				++it_c.move_now_;
-				//前回の座標
-				const auto old_position = it_c.position_old_;
-				it_c.position_old_ = position;
-				//前回のストック数
-				const auto old_stock = it_c.stock_;
-				it_c.stock_ = SurroundedBox(it_c);
-				//移動処理
-				move_flg = true;
-				if (MoveNonCombo(depth, ci + 1)) {
-					cleaner_move_[ci].push_front(next_position);
-					return true;
+			if (g_threads < kMaxThreads) {
+				vector<size_t> next_position;
+				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
+					// すぐ前に行った場所にバックするのは禁じられている
+					if (next_position_ == it_c.position_old_) continue;
+					// 障害物は乗り越えられない
+					auto &floor_ref = floor_[next_position_];
+					if (!CanMoveFloor(floor_ref)) continue;
+					next_position.push_back(next_position_);
 				}
-				it_c.stock_ = old_stock;
-				it_c.position_old_ = old_position;
-				--it_c.move_now_;
-				floor_ref = old_floor;
-				it_c.position_now_ = position;
+				vector<std::future<bool>> result(next_position.size());
+				std::deque<bool> result_get(next_position.size());
+				vector<Query> query_back(next_position.size(), *this);
+				g_mutex.lock(); g_threads += next_position.size() - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position.size(); ++di) {
+					result[di] = std::async(std::launch::async, [this, &it_c, next_position, ci, di, &query_back, depth] {
+						const auto old_position = it_c.position_old_;
+						const auto old_stock = it_c.stock_;
+						const auto old_floor = floor_[next_position[di]];
+						query_back[di].MoveCleanerForward(ci, next_position[di]);
+						// 移動処理
+						if (!query_back[di].MoveNonCombo(depth, ci + 1)) return false;
+						query_back[di].cleaner_move_[ci].push_front(next_position[di]);
+						return true;
+					});
+				}
+				for (size_t di = 0; di < next_position.size(); ++di) {
+					result_get[di] = result[di].get();
+				}
+				g_mutex.lock(); g_threads -= next_position.size() - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position.size(); ++di) {
+					if (result_get[di]) {
+						*this = std::move(query_back[di]);
+						return true;
+					}
+				}
+				return false;
+			}
+			else {
+				for (const auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+					// すぐ前に行った場所にバックするのは禁じられている
+					if (next_position == it_c.position_old_) continue;
+					// 障害物は乗り越えられない
+					auto &floor_ref = floor_[next_position];
+					if (!CanMoveFloor(floor_ref)) continue;
+					// 移動を行う
+					const auto old_position = it_c.position_old_;
+					const auto old_floor = floor_ref;
+					const auto old_stock = it_c.stock_;
+					MoveCleanerForward(ci, next_position);
+					// 移動処理
+					if (MoveNonCombo(depth, ci + 1)) {
+						cleaner_move_[ci].push_front(next_position);
+						return true;
+					}
+					// 元に戻す
+					MoveCleanerBack(ci, next_position);
+					it_c.position_old_ = old_position;
+					floor_ref = old_floor;
+					it_c.stock_ = old_stock;
+				}
 			}
 			return false;
 		}
@@ -489,7 +577,10 @@ public:
 		if (depth >= max_depth_) {
 			// 盤面が埋まっているかをチェックする
 			if (Sweeped()) {
-				Put();
+				g_mutex.lock();
+				//Put();
+				g_solved_flg = true;
+				g_mutex.unlock();
 				return true;
 			}
 			else {

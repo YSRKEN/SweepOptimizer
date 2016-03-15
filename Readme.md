@@ -74,9 +74,10 @@ Cygames Inc.提供のスマホゲー「ルームスイーパ」の解を探索します。
 MITライセンスとします。
 
 ## 開発者
-|名前       |GitHub                        |Twitter                      |
-|:----------|:-----------------------------|:----------------------------|
-|YSR        |https://github.com/YSRKEN     |https://twitter.com/YSRKEN   |
+|名前       |GitHub                     |Twitter                     |
+|:----------|:--------------------------|:---------------------------|
+|YSR        |https://github.com/YSRKEN  |https://twitter.com/YSRKEN  |
+|yumetodo   |https://github.com/yumetodo|https://twitter.com/yumetodo|
 
 ## バージョン履歴
 ### Ver.1.2.0
