@@ -5,11 +5,13 @@ Cygames Inc.提供のスマホゲー「ルームスイーパ」の解を探索します。
 (https://chogetsuku.jp/product/roomsweeper/)
 
 ## 使い方
-`usage: SweepOptimizer input.txt`
+`usage: SweepOptimizer input.txt [threads]`
 
 - input.txt(問題ファイル)の形式は後述します
 - 出力としては、初期盤面・解答盤面・各キャラクターの座標の推移があります
 - 座標は[X,Y](どちらにせよ0スタート、左上基準)で、歩数は現在/最大歩数です
+- threadsオプション(1以上の整数)を付けると、その数だけスレッドを生成して実行します  
+(マルチスレッド)
 
 ## 入出力例
 
@@ -80,6 +82,9 @@ MITライセンスとします。
 |yumetodo   |https://github.com/yumetodo|https://twitter.com/yumetodo|
 
 ## バージョン履歴
+### Ver.1.3.0
+マルチスレッドに対応。2コア以上のCPUではより高速に検索できます。
+
 ### Ver.1.2.0
 処理をより細かい関数に分割した上で、バッファを設置するなどして条件分岐および計算量を減らして高速化させた。
 
