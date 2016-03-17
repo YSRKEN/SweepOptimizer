@@ -424,16 +424,6 @@ public:
 				next_position[next_position_size] = next_position_;
 				++next_position_size;
 			}
-			// 手を並び替えておく
-			for (size_t di = 0; di < next_position_size - 1; ++di) {
-				for (size_t dj = di + 1; dj < next_position_size; ++dj) {
-					if (!MustCleanFloor(floor_[next_position[di]]) && MustCleanFloor(floor_[next_position[dj]])) {
-						size_t temp = next_position[di];
-						next_position[di] = next_position[dj];
-						next_position[dj] = temp;
-					}
-				}
-			}
 			// スレッド数によって分岐
 			if (g_threads < max_threads_) {
 				vector<std::future<bool>> result(next_position_size);
@@ -465,6 +455,16 @@ public:
 				return false;
 			}
 			else {
+				// 手を並び替えておく
+				for (size_t di = 0; di < next_position_size - 1; ++di) {
+					for (size_t dj = di + 1; dj < next_position_size; ++dj) {
+						if (!MustCleanFloor(floor_[next_position[di]]) && MustCleanFloor(floor_[next_position[dj]])) {
+							size_t temp = next_position[di];
+							next_position[di] = next_position[dj];
+							next_position[dj] = temp;
+						}
+					}
+				}
 				for (size_t di = 0; di < next_position_size; ++di) {
 					auto &floor_ref = floor_[next_position[di]];
 					// 移動を行う
@@ -530,16 +530,6 @@ public:
 				next_position[next_position_size] = next_position_;
 				++next_position_size;
 			}
-			// 手を並び替えておく
-			for (size_t di = 0; di < next_position_size - 1; ++di) {
-				for (size_t dj = di + 1; dj < next_position_size; ++dj) {
-					if (!MustCleanFloor(floor_[next_position[di]]) && MustCleanFloor(floor_[next_position[dj]])) {
-						size_t temp = next_position[di];
-						next_position[di] = next_position[dj];
-						next_position[dj] = temp;
-					}
-				}
-			}
 			// スレッド数によって分岐
 			if (g_threads < max_threads_) {
 				vector<std::future<bool>> result(next_position_size);
@@ -571,6 +561,16 @@ public:
 				return false;
 			}
 			else {
+				// 手を並び替えておく
+				for (size_t di = 0; di < next_position_size - 1; ++di) {
+					for (size_t dj = di + 1; dj < next_position_size; ++dj) {
+						if (!MustCleanFloor(floor_[next_position[di]]) && MustCleanFloor(floor_[next_position[dj]])) {
+							size_t temp = next_position[di];
+							next_position[di] = next_position[dj];
+							next_position[dj] = temp;
+						}
+					}
+				}
 				for (size_t di = 0; di < next_position_size; ++di) {
 					auto &floor_ref = floor_[next_position[di]];
 					// 移動を行う
