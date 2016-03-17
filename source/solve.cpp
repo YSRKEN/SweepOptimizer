@@ -405,7 +405,6 @@ public:
 	}
 	// 探索ルーチン
 	bool MoveWithCombo(const size_t depth, const size_t index) {
-		if (g_solved_flg) return false;
 		// 全員を1歩だけ進める＝depthと等しい歩数の掃除人がいない
 		for (size_t ci = index; ci < cleaner_status_.size(); ++ci) {
 			auto &it_c = cleaner_status_[ci];
@@ -414,21 +413,34 @@ public:
 			if (it_c.move_now_ == it_c.move_max_) continue;
 			const auto position = it_c.position_now_;
 			// 上下左右の動きについて議論する
-			if (g_threads < max_threads_) {
-				vector<size_t> next_position;
-				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
-					// すぐ前に行った場所にバックするのは禁じられている
-					if (next_position_ == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position_];
-					if (!CanMoveFloor(floor_ref)) continue;
-					next_position.push_back(next_position_);
+			std::array<size_t, 4> next_position;
+			size_t next_position_size = 0;
+			for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
+				// すぐ前に行った場所にバックするのは禁じられている
+				if (next_position_ == it_c.position_old_) continue;
+				// 障害物は乗り越えられない
+				auto &floor_ref = floor_[next_position_];
+				if (!CanMoveFloor(floor_ref)) continue;
+				next_position[next_position_size] = next_position_;
+				++next_position_size;
+			}
+			// 手を並び替えておく
+			for (size_t di = 0; di < next_position_size - 1; ++di) {
+				for (size_t dj = di + 1; dj < next_position_size; ++dj) {
+					if (!MustCleanFloor(floor_[next_position[di]]) && MustCleanFloor(floor_[next_position[dj]])) {
+						size_t temp = next_position[di];
+						next_position[di] = next_position[dj];
+						next_position[dj] = temp;
+					}
 				}
-				vector<std::future<bool>> result(next_position.size());
-				std::deque<bool> result_get(next_position.size());
-				vector<Query> query_back(next_position.size(), *this);
-				g_mutex.lock(); g_threads += next_position.size() - 1; g_mutex.unlock();
-				for (size_t di = 0; di < next_position.size(); ++di) {
+			}
+			// スレッド数によって分岐
+			if (g_threads < max_threads_) {
+				vector<std::future<bool>> result(next_position_size);
+				std::deque<bool> result_get(next_position_size);
+				vector<Query> query_back(next_position_size, *this);
+				g_mutex.lock(); g_threads += next_position_size - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position_size; ++di) {
 					result[di] = std::async(std::launch::async, [this, &it_c, next_position, ci, di, &query_back, depth] {
 						const auto old_position = it_c.position_old_;
 						const auto old_stock = it_c.stock_;
@@ -440,11 +452,11 @@ public:
 						return true;
 					});
 				}
-				for (size_t di = 0; di < next_position.size(); ++di) {
+				for (size_t di = 0; di < next_position_size; ++di) {
 					result_get[di] = result[di].get();
 				}
-				g_mutex.lock(); g_threads -= next_position.size() - 1; g_mutex.unlock();
-				for (size_t di = 0; di < next_position.size(); ++di) {
+				g_mutex.lock(); g_threads -= next_position_size - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position_size; ++di) {
 					if (result_get[di]) {
 						*this = std::move(query_back[di]);
 						return true;
@@ -453,24 +465,20 @@ public:
 				return false;
 			}
 			else {
-				for (const auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
-					// すぐ前に行った場所にバックするのは禁じられている
-					if (next_position == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position];
-					if (!CanMoveFloor(floor_ref)) continue;
+				for (size_t di = 0; di < next_position_size; ++di) {
+					auto &floor_ref = floor_[next_position[di]];
 					// 移動を行う
 					const auto old_position = it_c.position_old_;
 					const auto old_floor = floor_ref;
 					const auto old_stock = it_c.stock_;
-					MoveCleanerForward(ci, next_position);
+					MoveCleanerForward(ci, next_position[di]);
 					// 移動処理
 					if (MoveWithCombo(depth, ci + 1)) {
-						cleaner_move_[ci].push_front(next_position);
+						cleaner_move_[ci].push_front(next_position[di]);
 						return true;
 					}
 					// 元に戻す
-					MoveCleanerBack(ci, next_position);
+					MoveCleanerBack(ci, next_position[di]);
 					it_c.position_old_ = old_position;
 					floor_ref = old_floor;
 					it_c.stock_ = old_stock;
@@ -511,18 +519,20 @@ public:
 			if (it_c.move_now_ == it_c.move_max_) continue;
 			const auto position = it_c.position_now_;
 			// 上下左右の動きについて議論する
-			vector<size_t> next_position;
+			std::array<size_t, 4> next_position;
+			size_t next_position_size = 0;
 			for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
 				// すぐ前に行った場所にバックするのは禁じられている
 				if (next_position_ == it_c.position_old_) continue;
 				// 障害物は乗り越えられない
 				auto &floor_ref = floor_[next_position_];
 				if (!CanMoveFloor(floor_ref)) continue;
-				next_position.push_back(next_position_);
+				next_position[next_position_size] = next_position_;
+				++next_position_size;
 			}
 			// 手を並び替えておく
-			for (size_t di = 0; di < next_position.size() - 1; ++di) {
-				for (size_t dj = di + 1; dj < next_position.size(); ++dj) {
+			for (size_t di = 0; di < next_position_size - 1; ++di) {
+				for (size_t dj = di + 1; dj < next_position_size; ++dj) {
 					if (!MustCleanFloor(floor_[next_position[di]]) && MustCleanFloor(floor_[next_position[dj]])) {
 						size_t temp = next_position[di];
 						next_position[di] = next_position[dj];
@@ -532,11 +542,11 @@ public:
 			}
 			// スレッド数によって分岐
 			if (g_threads < max_threads_) {
-				vector<std::future<bool>> result(next_position.size());
-				std::deque<bool> result_get(next_position.size());
-				vector<Query> query_back(next_position.size(), *this);
-				g_mutex.lock(); g_threads += next_position.size() - 1; g_mutex.unlock();
-				for (size_t di = 0; di < next_position.size(); ++di) {
+				vector<std::future<bool>> result(next_position_size);
+				std::deque<bool> result_get(next_position_size);
+				vector<Query> query_back(next_position_size, *this);
+				g_mutex.lock(); g_threads += next_position_size - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position_size; ++di) {
 					result[di] = std::async(std::launch::async, [this, &it_c, next_position, ci, di, &query_back, depth] {
 						const auto old_position = it_c.position_old_;
 						const auto old_stock = it_c.stock_;
@@ -548,11 +558,11 @@ public:
 						return true;
 					});
 				}
-				for (size_t di = 0; di < next_position.size(); ++di) {
+				for (size_t di = 0; di < next_position_size; ++di) {
 					result_get[di] = result[di].get();
 				}
-				g_mutex.lock(); g_threads -= next_position.size() - 1; g_mutex.unlock();
-				for (size_t di = 0; di < next_position.size(); ++di) {
+				g_mutex.lock(); g_threads -= next_position_size - 1; g_mutex.unlock();
+				for (size_t di = 0; di < next_position_size; ++di) {
 					if (result_get[di]) {
 						*this = std::move(query_back[di]);
 						return true;
@@ -561,7 +571,7 @@ public:
 				return false;
 			}
 			else {
-				for (size_t di = 0; di < next_position.size(); ++di) {
+				for (size_t di = 0; di < next_position_size; ++di) {
 					auto &floor_ref = floor_[next_position[di]];
 					// 移動を行う
 					const auto old_position = it_c.position_old_;
