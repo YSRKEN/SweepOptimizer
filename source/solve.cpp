@@ -50,6 +50,7 @@ struct Status {
 
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
 const std::array<Floor, Floor::Types> floor_types{ Floor::Dirty,Floor::Clean,Floor::Boy,Floor::Girl,Floor::Robot,Floor::Pool,Floor::Apple,Floor::Bottle,Floor::DustBox,Floor::RecycleBox,Floor::Obstacle };
+const size_t kDirections = 4;
 
 inline bool CanMoveFloor(const Floor floor) noexcept {
 	return (floor & Floor::CanMoveFlg) != 0;
@@ -83,6 +84,8 @@ class Query{
 	vector<char> near_dustbox_, near_recyclebox_;
 	// 実行時のスレッド数
 	size_t max_threads_;
+	// 次に移動可能な方向
+	vector<vector<size_t>> next_position_;
 public:
 	// コンストラクタ
 	Query(const char file_name[], const size_t max_threads){
@@ -96,6 +99,7 @@ public:
 		x_mini_ = x; y_mini_ = y;
 		x_ = x + 2; y_ = y + 2;	//番兵用に拡張する
 		floor_.resize(x_ * y_, Floor::Obstacle);
+		next_position_.resize(x_ * y_, vector<size_t>());
 		// 盤面データを読み込み、反映させる
 		vector<vector<Status>> cleaner_status_temp;
 		cleaner_status_temp.resize(kCleanerTypes);
@@ -120,6 +124,15 @@ public:
 					break;
 				default:
 					break;
+				}
+			}
+		}
+		for (size_t j = 1; j <= y; ++j) {
+			for (size_t i = 1; i <= x; ++i) {
+				size_t position = j * x_ + i;
+				for (auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+					if (!CanMoveFloor(floor_[next_position])) continue;
+					next_position_[position].push_back(next_position);
 				}
 			}
 		}
@@ -416,13 +429,12 @@ public:
 			// 上下左右の動きについて議論する
 			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
-				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
+				next_position.reserve(kDirections);
+				for (auto next : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
-					if (next_position_ == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position_];
-					if (!CanMoveFloor(floor_ref)) continue;
-					next_position.push_back(next_position_);
+					if (next == it_c.position_old_) continue;
+					// 移動先に追加
+					next_position.push_back(next);
 				}
 				vector<std::future<bool>> result(next_position.size());
 				std::deque<bool> result_get(next_position.size());
@@ -453,13 +465,11 @@ public:
 				return false;
 			}
 			else {
-				for (const auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+				for (auto next_position : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next_position == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position];
-					if (!CanMoveFloor(floor_ref)) continue;
 					// 移動を行う
+					auto &floor_ref = floor_[next_position];
 					const auto old_position = it_c.position_old_;
 					const auto old_floor = floor_ref;
 					const auto old_stock = it_c.stock_;
@@ -513,13 +523,12 @@ public:
 			// 上下左右の動きについて議論する
 			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
-				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
+				next_position.reserve(kDirections);
+				for (auto next : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
-					if (next_position_ == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position_];
-					if (!CanMoveFloor(floor_ref)) continue;
-					next_position.push_back(next_position_);
+					if (next == it_c.position_old_) continue;
+					// 移動先に追加
+					next_position.push_back(next);
 				}
 				vector<std::future<bool>> result(next_position.size());
 				std::deque<bool> result_get(next_position.size());
@@ -550,13 +559,11 @@ public:
 				return false;
 			}
 			else {
-				for (const auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+				for (auto next_position : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next_position == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position];
-					if (!CanMoveFloor(floor_ref)) continue;
 					// 移動を行う
+					auto &floor_ref = floor_[next_position];
 					const auto old_position = it_c.position_old_;
 					const auto old_floor = floor_ref;
 					const auto old_stock = it_c.stock_;
