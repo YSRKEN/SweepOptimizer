@@ -623,21 +623,36 @@ public:
 int main(int argc, char *argv[]){
 	if(argc < 2) return -1;
 	int max_threads = 1;
+	bool must_combo_flg = false;
 	if (argc >= 3) {
 		max_threads = std::stoi(argv[2]);
-		if (max_threads < 1) max_threads = 1;
+		if (max_threads == 0) {
+			max_threads = 1;
+		}else if (max_threads < 0) {
+			must_combo_flg = true;
+			max_threads = -max_threads;
+		}
 	}
 	Query query(argv[1], max_threads);
 	query.Put();
-	const auto process_begin_time = std::chrono::high_resolution_clock::now();
-	bool flg = query.MoveNonCombo(0, 0);
-	auto process_end_time = std::chrono::high_resolution_clock::now();
-	if (!flg) {
-		cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
-		flg = query.MoveWithCombo(0, 0);
-		process_end_time = std::chrono::high_resolution_clock::now();
+	if (!must_combo_flg) {
+		const auto process_begin_time = std::chrono::high_resolution_clock::now();
+		bool flg = query.MoveNonCombo(0, 0);
+		auto process_end_time = std::chrono::high_resolution_clock::now();
+		if (!flg) {
+			cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
+			flg = query.MoveWithCombo(0, 0);
+			process_end_time = std::chrono::high_resolution_clock::now();
+		}
+		if (flg) query.ShowAnswer();
+		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
 	}
-	if (flg) query.ShowAnswer();
-	cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
-	return 0;
+	else {
+		const auto process_begin_time = std::chrono::high_resolution_clock::now();
+		bool flg = query.MoveWithCombo(0, 0);
+		const auto process_end_time = std::chrono::high_resolution_clock::now();
+		if (flg) query.ShowAnswer();
+		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
+	}
+return 0;
 }
