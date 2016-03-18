@@ -50,6 +50,7 @@ struct Status {
 
 const size_t kCleanerTypes = 3;	//掃除人の種類数(男の子・女の子・ロボット)
 const std::array<Floor, Floor::Types> floor_types{ Floor::Dirty,Floor::Clean,Floor::Boy,Floor::Girl,Floor::Robot,Floor::Pool,Floor::Apple,Floor::Bottle,Floor::DustBox,Floor::RecycleBox,Floor::Obstacle };
+const size_t kDirections = 4;
 
 inline bool CanMoveFloor(const Floor floor) noexcept {
 	return (floor & Floor::CanMoveFlg) != 0;
@@ -83,6 +84,10 @@ class Query{
 	vector<char> near_dustbox_, near_recyclebox_;
 	// 実行時のスレッド数
 	size_t max_threads_;
+	// 次に移動可能な方向
+	vector<vector<size_t>> next_position_;
+	// マップの位置を記録する変数
+	vector<size_t> position_;
 public:
 	// コンストラクタ
 	Query(const char file_name[], const size_t max_threads){
@@ -96,6 +101,7 @@ public:
 		x_mini_ = x; y_mini_ = y;
 		x_ = x + 2; y_ = y + 2;	//番兵用に拡張する
 		floor_.resize(x_ * y_, Floor::Obstacle);
+		next_position_.resize(x_ * y_, vector<size_t>());
 		// 盤面データを読み込み、反映させる
 		vector<vector<Status>> cleaner_status_temp;
 		cleaner_status_temp.resize(kCleanerTypes);
@@ -105,6 +111,7 @@ public:
 				fin >> temp;
 				if (temp >= Floor::Types) temp = Floor::Obstacle;
 				size_t position = j * x_ + i;
+				position_.push_back(position);
 				switch (floor_[position] = floor_types[temp]) {
 				case Floor::Boy:
 					cleaner_status_temp[0].push_back(Status{ Floor::Boy, 0, 0, position, position, position, 0});
@@ -123,6 +130,12 @@ public:
 				}
 			}
 		}
+		for (const auto& position : position_) {
+			for (const auto &next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+				if (!CanMoveFloor(floor_[next_position])) continue;
+				next_position_[position].push_back(next_position);
+			}
+		}
 		// 掃除人データを読み込み、反映させる
 		max_depth_ = 0;
 		for(size_t ti = 0; ti < kCleanerTypes; ++ti){
@@ -139,8 +152,8 @@ public:
 				max_depth_ = std::max(max_depth_, temp);
 			}
 		}
-		for (auto &it_t : cleaner_status_temp) {
-			for (auto &it_c : it_t) {
+		for (const auto &it_t : cleaner_status_temp) {
+			for (const auto &it_c : it_t) {
 				cleaner_status_.push_back(it_c);
 			}
 		}
@@ -181,21 +194,18 @@ public:
 		// 事前に周囲にゴミ箱/リサイクル箱があるかを判定しておく
 		near_dustbox_.resize(x_ * y_, 0);
 		near_recyclebox_.resize(x_ * y_, 0);
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				size_t position = j * x_ + i;
-				if (floor_[position - x_] == Floor::DustBox
-					|| floor_[position - 1] == Floor::DustBox
-					|| floor_[position + 1] == Floor::DustBox
-					|| floor_[position + x_] == Floor::DustBox) {
-					near_dustbox_[position] = 1;
-				}
-				if (floor_[position - x_] == Floor::RecycleBox
-					|| floor_[position - 1] == Floor::RecycleBox
-					|| floor_[position + 1] == Floor::RecycleBox
-					|| floor_[position + x_] == Floor::RecycleBox) {
-					near_recyclebox_[position] = 1;
-				}
+		for (const auto& position : position_) {
+			if (floor_[position - x_] == Floor::DustBox
+				|| floor_[position - 1] == Floor::DustBox
+				|| floor_[position + 1] == Floor::DustBox
+				|| floor_[position + x_] == Floor::DustBox) {
+				near_dustbox_[position] = 1;
+			}
+			if (floor_[position - x_] == Floor::RecycleBox
+				|| floor_[position - 1] == Floor::RecycleBox
+				|| floor_[position + 1] == Floor::RecycleBox
+				|| floor_[position + x_] == Floor::RecycleBox) {
+				near_recyclebox_[position] = 1;
 			}
 		}
 	}
@@ -267,66 +277,51 @@ public:
 		cout << endl;
 	}
 	// 終了判定
-	bool Sweeped() {
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				size_t k = j * x_ + i;
-				if (MustCleanFloor(floor_[k])) return false;
-			}
+	bool Sweeped() const noexcept{
+		for (const auto& position : position_) {
+			if (MustCleanFloor(floor_[position])) return false;
 		}
-		for (auto &it_c : cleaner_status_) {
+		for (const auto &it_c : cleaner_status_) {
 			if (it_c.stock_ != 0) return false;
 		}
 		return true;
 	}
-	// 現状では拭ききれない場合はfalse(nは許容量)
+	// 現状では拭ききれない場合はfalse
 	bool CanMoveWithCombo() const noexcept {
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				const size_t position = j * x_ + i;
-				// 拭かなくてもいいマスは無視する
-				auto &cell = floor_[position];
-				if (!MustCleanFloor(cell)) continue;
-				// 拭く必要がある場合は調査する
-				bool can_move_flg = false;
-				for (const auto &it_c : cleaner_status_) {
-					if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_combo_) {
-						if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
-							|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
-							|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
-						can_move_flg = true;
-						break;
-					}
-				}
-				if (!can_move_flg) {
-					return false;
-				}
+		for (const auto& position : position_) {
+			// 拭かなくてもいいマスは無視する
+			const auto &cell = floor_[position];
+			if (!MustCleanFloor(cell)) continue;
+			// 拭く必要がある場合は調査する
+			bool can_move_flg = false;
+			for (const auto &it_c : cleaner_status_) {
+				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_combo_)
+					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
+					|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
+					|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
+				can_move_flg = true;
+				break;
 			}
+			if (!can_move_flg) return false;
 		}
 		return true;
 	}
 	bool CanMoveNonCombo() const noexcept {
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				const size_t position = j * x_ + i;
-				// 拭かなくてもいいマスは無視する
-				auto &cell = floor_[position];
-				if (!MustCleanFloor(cell)) continue;
-				// 拭く必要がある場合は調査する
-				bool can_move_flg = false;
-				for (const auto &it_c : cleaner_status_) {
-					if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
-						if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
-							|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
-							|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
-						can_move_flg = true;
-						break;
-					}
-				}
-				if (!can_move_flg) {
-					return false;
-				}
+		for (const auto& position : position_) {
+			// 拭かなくてもいいマスは無視する
+			const auto &cell = floor_[position];
+			if (!MustCleanFloor(cell)) continue;
+			// 拭く必要がある場合は調査する
+			bool can_move_flg = false;
+			for (const auto &it_c : cleaner_status_) {
+				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_)
+					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
+					|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
+					|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
+				can_move_flg = true;
+				break;
 			}
+			if (!can_move_flg) return false;
 		}
 		return true;
 	}
@@ -412,17 +407,16 @@ public:
 			// 歩を進めるべきではない掃除人は飛ばす
 			if (it_c.move_now_ != depth) continue;
 			if (it_c.move_now_ == it_c.move_max_) continue;
-			const auto position = it_c.position_now_;
+			const auto &position = it_c.position_now_;
 			// 上下左右の動きについて議論する
 			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
-				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
+				next_position.reserve(kDirections);
+				for (const auto &next : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
-					if (next_position_ == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position_];
-					if (!CanMoveFloor(floor_ref)) continue;
-					next_position.push_back(next_position_);
+					if (next == it_c.position_old_) continue;
+					// 移動先に追加
+					next_position.push_back(next);
 				}
 				vector<std::future<bool>> result(next_position.size());
 				std::deque<bool> result_get(next_position.size());
@@ -453,13 +447,11 @@ public:
 				return false;
 			}
 			else {
-				for (const auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+				for (const auto &next_position : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next_position == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position];
-					if (!CanMoveFloor(floor_ref)) continue;
 					// 移動を行う
+					auto &floor_ref = floor_[next_position];
 					const auto old_position = it_c.position_old_;
 					const auto old_floor = floor_ref;
 					const auto old_stock = it_c.stock_;
@@ -483,7 +475,6 @@ public:
 			// 盤面が埋まっているかをチェックする
 			if (Sweeped()) {
 				g_mutex.lock();
-				//Put();
 				g_solved_flg = true;
 				g_mutex.unlock();
 				return true;
@@ -509,17 +500,16 @@ public:
 			// 歩を進めるべきではない掃除人は飛ばす
 			if (it_c.move_now_ != depth) continue;
 			if (it_c.move_now_ == it_c.move_max_) continue;
-			const auto position = it_c.position_now_;
+			const auto &position = it_c.position_now_;
 			// 上下左右の動きについて議論する
 			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
-				for (const auto next_position_ : { position - x_, position - 1, position + 1, position + x_ }) {
+				next_position.reserve(kDirections);
+				for (const auto &next : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
-					if (next_position_ == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position_];
-					if (!CanMoveFloor(floor_ref)) continue;
-					next_position.push_back(next_position_);
+					if (next == it_c.position_old_) continue;
+					// 移動先に追加
+					next_position.push_back(next);
 				}
 				vector<std::future<bool>> result(next_position.size());
 				std::deque<bool> result_get(next_position.size());
@@ -550,13 +540,11 @@ public:
 				return false;
 			}
 			else {
-				for (const auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+				for (const auto &next_position : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next_position == it_c.position_old_) continue;
-					// 障害物は乗り越えられない
-					auto &floor_ref = floor_[next_position];
-					if (!CanMoveFloor(floor_ref)) continue;
 					// 移動を行う
+					auto &floor_ref = floor_[next_position];
 					const auto old_position = it_c.position_old_;
 					const auto old_floor = floor_ref;
 					const auto old_stock = it_c.stock_;
@@ -580,7 +568,6 @@ public:
 			// 盤面が埋まっているかをチェックする
 			if (Sweeped()) {
 				g_mutex.lock();
-				//Put();
 				g_solved_flg = true;
 				g_mutex.unlock();
 				return true;
@@ -594,7 +581,7 @@ public:
 		return MoveNonCombo(depth + 1, 0);
 	}
 	// 解答を表示する
-	void ShowAnswer() {
+	void ShowAnswer() const noexcept{
 		for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
 			switch (cleaner_status_[ci].type_) {
 			case Floor::Boy:
@@ -610,7 +597,7 @@ public:
 			cout << " " << GetPos(cleaner_status_[ci].position_first_);
 			size_t old_position = cleaner_status_[ci].position_first_;
 			size_t count = 0;
-			for (auto it_m : cleaner_move_[ci]) {
+			for (const auto &it_m : cleaner_move_[ci]) {
 				cout << "->" << GetPos(it_m);
 				if (old_position + 1 == it_m) {
 					cout << "(右)";
@@ -636,21 +623,36 @@ public:
 int main(int argc, char *argv[]){
 	if(argc < 2) return -1;
 	int max_threads = 1;
+	bool must_combo_flg = false;
 	if (argc >= 3) {
 		max_threads = std::stoi(argv[2]);
-		if (max_threads < 1) max_threads = 1;
+		if (max_threads == 0) {
+			max_threads = 1;
+		}else if (max_threads < 0) {
+			must_combo_flg = true;
+			max_threads = -max_threads;
+		}
 	}
 	Query query(argv[1], max_threads);
 	query.Put();
-	const auto process_begin_time = std::chrono::high_resolution_clock::now();
-	bool flg = query.MoveNonCombo(0, 0);
-	auto process_end_time = std::chrono::high_resolution_clock::now();
-	if (!flg) {
-		cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
-		flg = query.MoveWithCombo(0, 0);
-		process_end_time = std::chrono::high_resolution_clock::now();
+	if (!must_combo_flg) {
+		const auto process_begin_time = std::chrono::high_resolution_clock::now();
+		bool flg = query.MoveNonCombo(0, 0);
+		auto process_end_time = std::chrono::high_resolution_clock::now();
+		if (!flg) {
+			cout << "..." << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]..." << endl;
+			flg = query.MoveWithCombo(0, 0);
+			process_end_time = std::chrono::high_resolution_clock::now();
+		}
+		if (flg) query.ShowAnswer();
+		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
 	}
-	if (flg) query.ShowAnswer();
-	cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
-	return 0;
+	else {
+		const auto process_begin_time = std::chrono::high_resolution_clock::now();
+		bool flg = query.MoveWithCombo(0, 0);
+		const auto process_end_time = std::chrono::high_resolution_clock::now();
+		if (flg) query.ShowAnswer();
+		cout << "処理時間：" << std::chrono::duration_cast<std::chrono::milliseconds>(process_end_time - process_begin_time).count() << "[ms]\n" << endl;
+	}
+return 0;
 }
