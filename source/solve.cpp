@@ -130,7 +130,7 @@ public:
 		for (size_t j = 1; j <= y; ++j) {
 			for (size_t i = 1; i <= x; ++i) {
 				size_t position = j * x_ + i;
-				for (auto next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+				for (const auto &next_position : { position - x_, position - 1, position + 1, position + x_ }) {
 					if (!CanMoveFloor(floor_[next_position])) continue;
 					next_position_[position].push_back(next_position);
 				}
@@ -152,8 +152,8 @@ public:
 				max_depth_ = std::max(max_depth_, temp);
 			}
 		}
-		for (auto &it_t : cleaner_status_temp) {
-			for (auto &it_c : it_t) {
+		for (const auto &it_t : cleaner_status_temp) {
+			for (const auto &it_c : it_t) {
 				cleaner_status_.push_back(it_c);
 			}
 		}
@@ -287,12 +287,12 @@ public:
 				if (MustCleanFloor(floor_[k])) return false;
 			}
 		}
-		for (auto &it_c : cleaner_status_) {
+		for (const auto &it_c : cleaner_status_) {
 			if (it_c.stock_ != 0) return false;
 		}
 		return true;
 	}
-	// 現状では拭ききれない場合はfalse(nは許容量)
+	// 現状では拭ききれない場合はfalse
 	bool CanMoveWithCombo() const noexcept {
 		for (size_t j = 1; j <= y_mini_; ++j) {
 			for (size_t i = 1; i <= x_mini_; ++i) {
@@ -425,12 +425,12 @@ public:
 			// 歩を進めるべきではない掃除人は飛ばす
 			if (it_c.move_now_ != depth) continue;
 			if (it_c.move_now_ == it_c.move_max_) continue;
-			const auto position = it_c.position_now_;
+			const auto &position = it_c.position_now_;
 			// 上下左右の動きについて議論する
 			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
 				next_position.reserve(kDirections);
-				for (auto next : next_position_[position]) {
+				for (const auto &next : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next == it_c.position_old_) continue;
 					// 移動先に追加
@@ -465,7 +465,7 @@ public:
 				return false;
 			}
 			else {
-				for (auto next_position : next_position_[position]) {
+				for (const auto &next_position : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next_position == it_c.position_old_) continue;
 					// 移動を行う
@@ -519,12 +519,12 @@ public:
 			// 歩を進めるべきではない掃除人は飛ばす
 			if (it_c.move_now_ != depth) continue;
 			if (it_c.move_now_ == it_c.move_max_) continue;
-			const auto position = it_c.position_now_;
+			const auto &position = it_c.position_now_;
 			// 上下左右の動きについて議論する
 			if (g_threads < max_threads_) {
 				vector<size_t> next_position;
 				next_position.reserve(kDirections);
-				for (auto next : next_position_[position]) {
+				for (const auto &next : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next == it_c.position_old_) continue;
 					// 移動先に追加
@@ -559,7 +559,7 @@ public:
 				return false;
 			}
 			else {
-				for (auto next_position : next_position_[position]) {
+				for (const auto &next_position : next_position_[position]) {
 					// すぐ前に行った場所にバックするのは禁じられている
 					if (next_position == it_c.position_old_) continue;
 					// 移動を行う
@@ -617,7 +617,7 @@ public:
 			cout << " " << GetPos(cleaner_status_[ci].position_first_);
 			size_t old_position = cleaner_status_[ci].position_first_;
 			size_t count = 0;
-			for (auto it_m : cleaner_move_[ci]) {
+			for (const auto &it_m : cleaner_move_[ci]) {
 				cout << "->" << GetPos(it_m);
 				if (old_position + 1 == it_m) {
 					cout << "(右)";
