@@ -86,6 +86,8 @@ class Query{
 	size_t max_threads_;
 	// 次に移動可能な方向
 	vector<vector<size_t>> next_position_;
+	// マップの位置を記録する変数
+	vector<size_t> position_;
 public:
 	// コンストラクタ
 	Query(const char file_name[], const size_t max_threads){
@@ -109,6 +111,7 @@ public:
 				fin >> temp;
 				if (temp >= Floor::Types) temp = Floor::Obstacle;
 				size_t position = j * x_ + i;
+				position_.push_back(position);
 				switch (floor_[position] = floor_types[temp]) {
 				case Floor::Boy:
 					cleaner_status_temp[0].push_back(Status{ Floor::Boy, 0, 0, position, position, position, 0});
@@ -127,13 +130,10 @@ public:
 				}
 			}
 		}
-		for (size_t j = 1; j <= y; ++j) {
-			for (size_t i = 1; i <= x; ++i) {
-				size_t position = j * x_ + i;
-				for (const auto &next_position : { position - x_, position - 1, position + 1, position + x_ }) {
-					if (!CanMoveFloor(floor_[next_position])) continue;
-					next_position_[position].push_back(next_position);
-				}
+		for (const auto& position : position_) {
+			for (const auto &next_position : { position - x_, position - 1, position + 1, position + x_ }) {
+				if (!CanMoveFloor(floor_[next_position])) continue;
+				next_position_[position].push_back(next_position);
 			}
 		}
 		// 掃除人データを読み込み、反映させる
@@ -194,21 +194,18 @@ public:
 		// 事前に周囲にゴミ箱/リサイクル箱があるかを判定しておく
 		near_dustbox_.resize(x_ * y_, 0);
 		near_recyclebox_.resize(x_ * y_, 0);
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				size_t position = j * x_ + i;
-				if (floor_[position - x_] == Floor::DustBox
-					|| floor_[position - 1] == Floor::DustBox
-					|| floor_[position + 1] == Floor::DustBox
-					|| floor_[position + x_] == Floor::DustBox) {
-					near_dustbox_[position] = 1;
-				}
-				if (floor_[position - x_] == Floor::RecycleBox
-					|| floor_[position - 1] == Floor::RecycleBox
-					|| floor_[position + 1] == Floor::RecycleBox
-					|| floor_[position + x_] == Floor::RecycleBox) {
-					near_recyclebox_[position] = 1;
-				}
+		for (const auto& position : position_) {
+			if (floor_[position - x_] == Floor::DustBox
+				|| floor_[position - 1] == Floor::DustBox
+				|| floor_[position + 1] == Floor::DustBox
+				|| floor_[position + x_] == Floor::DustBox) {
+				near_dustbox_[position] = 1;
+			}
+			if (floor_[position - x_] == Floor::RecycleBox
+				|| floor_[position - 1] == Floor::RecycleBox
+				|| floor_[position + 1] == Floor::RecycleBox
+				|| floor_[position + x_] == Floor::RecycleBox) {
+				near_recyclebox_[position] = 1;
 			}
 		}
 	}
@@ -281,11 +278,8 @@ public:
 	}
 	// 終了判定
 	bool Sweeped() {
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				size_t k = j * x_ + i;
-				if (MustCleanFloor(floor_[k])) return false;
-			}
+		for (const auto& position : position_) {
+			if (MustCleanFloor(floor_[position])) return false;
 		}
 		for (const auto &it_c : cleaner_status_) {
 			if (it_c.stock_ != 0) return false;
@@ -294,51 +288,45 @@ public:
 	}
 	// 現状では拭ききれない場合はfalse
 	bool CanMoveWithCombo() const noexcept {
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				const size_t position = j * x_ + i;
-				// 拭かなくてもいいマスは無視する
-				auto &cell = floor_[position];
-				if (!MustCleanFloor(cell)) continue;
-				// 拭く必要がある場合は調査する
-				bool can_move_flg = false;
-				for (const auto &it_c : cleaner_status_) {
-					if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_combo_) {
-						if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
-							|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
-							|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
-						can_move_flg = true;
-						break;
-					}
+		for (const auto& position : position_) {
+			// 拭かなくてもいいマスは無視する
+			const auto &cell = floor_[position];
+			if (!MustCleanFloor(cell)) continue;
+			// 拭く必要がある場合は調査する
+			bool can_move_flg = false;
+			for (const auto &it_c : cleaner_status_) {
+				if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_combo_) {
+					if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
+						|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
+						|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
+					can_move_flg = true;
+					break;
 				}
-				if (!can_move_flg) {
-					return false;
-				}
+			}
+			if (!can_move_flg) {
+				return false;
 			}
 		}
 		return true;
 	}
 	bool CanMoveNonCombo() const noexcept {
-		for (size_t j = 1; j <= y_mini_; ++j) {
-			for (size_t i = 1; i <= x_mini_; ++i) {
-				const size_t position = j * x_ + i;
-				// 拭かなくてもいいマスは無視する
-				auto &cell = floor_[position];
-				if (!MustCleanFloor(cell)) continue;
-				// 拭く必要がある場合は調査する
-				bool can_move_flg = false;
-				for (const auto &it_c : cleaner_status_) {
-					if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
-						if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
-							|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
-							|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
-						can_move_flg = true;
-						break;
-					}
+		for (const auto& position : position_) {
+			// 拭かなくてもいいマスは無視する
+			const auto &cell = floor_[position];
+			if (!MustCleanFloor(cell)) continue;
+			// 拭く必要がある場合は調査する
+			bool can_move_flg = false;
+			for (const auto &it_c : cleaner_status_) {
+				if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
+					if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
+						|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
+						|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
+					can_move_flg = true;
+					break;
 				}
-				if (!can_move_flg) {
-					return false;
-				}
+			}
+			if (!can_move_flg) {
+				return false;
 			}
 		}
 		return true;
@@ -493,7 +481,6 @@ public:
 			// 盤面が埋まっているかをチェックする
 			if (Sweeped()) {
 				g_mutex.lock();
-				//Put();
 				g_solved_flg = true;
 				g_mutex.unlock();
 				return true;
@@ -587,7 +574,6 @@ public:
 			// 盤面が埋まっているかをチェックする
 			if (Sweeped()) {
 				g_mutex.lock();
-				//Put();
 				g_solved_flg = true;
 				g_mutex.unlock();
 				return true;
