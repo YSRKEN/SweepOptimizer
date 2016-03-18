@@ -277,7 +277,7 @@ public:
 		cout << endl;
 	}
 	// 終了判定
-	bool Sweeped() {
+	bool Sweeped() const noexcept{
 		for (const auto& position : position_) {
 			if (MustCleanFloor(floor_[position])) return false;
 		}
@@ -295,17 +295,14 @@ public:
 			// 拭く必要がある場合は調査する
 			bool can_move_flg = false;
 			for (const auto &it_c : cleaner_status_) {
-				if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_combo_) {
-					if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
-						|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
-						|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
-					can_move_flg = true;
-					break;
-				}
+				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_combo_)
+					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
+					|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
+					|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
+				can_move_flg = true;
+				break;
 			}
-			if (!can_move_flg) {
-				return false;
-			}
+			if (!can_move_flg) return false;
 		}
 		return true;
 	}
@@ -317,17 +314,14 @@ public:
 			// 拭く必要がある場合は調査する
 			bool can_move_flg = false;
 			for (const auto &it_c : cleaner_status_) {
-				if (min_cost_[position][it_c.position_now_] + it_c.move_now_ <= it_c.move_max_) {
-					if ((cell == Floor::Pool && it_c.type_ != Floor::Boy)
-						|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
-						|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
-					can_move_flg = true;
-					break;
-				}
+				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_)
+					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
+					|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
+					|| (cell == Floor::Bottle && it_c.type_ != Floor::Robot)) continue;
+				can_move_flg = true;
+				break;
 			}
-			if (!can_move_flg) {
-				return false;
-			}
+			if (!can_move_flg) return false;
 		}
 		return true;
 	}
@@ -587,7 +581,7 @@ public:
 		return MoveNonCombo(depth + 1, 0);
 	}
 	// 解答を表示する
-	void ShowAnswer() {
+	void ShowAnswer() const noexcept{
 		for (size_t ci = 0; ci < cleaner_status_.size(); ++ci) {
 			switch (cleaner_status_[ci].type_) {
 			case Floor::Boy:
