@@ -201,3 +201,4 @@ zip/
 *.VC.opendb
 sample/test.bat
 .vs/
+*.diagsession
