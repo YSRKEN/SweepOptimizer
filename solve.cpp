@@ -73,6 +73,8 @@ class Query{
 	vector<Floor> floor_;
 	// 掃除人の種類・現在の歩数・最大歩数・現在の位置・過去の位置
 	vector<Status> cleaner_status_;
+	// 各掃除人のスタート位置と終了位置
+	//std::vector<Status>::iterator boy_begin_, boy_end_, girl_begin_, girl_end_, robot_begin_, robot_end_;
 	// 最大歩数の最大
 	size_t max_depth_;
 	// 解答における、各掃除人の移動経路
@@ -157,6 +159,12 @@ public:
 				cleaner_status_.push_back(it_c);
 			}
 		}
+		/*boy_begin_ = cleaner_status_.begin();
+		boy_end_ = boy_begin_ + cleaner_status_temp[0].size();
+		girl_begin_ = boy_end_;
+		girl_end_ = girl_begin_ + cleaner_status_temp[1].size();
+		robot_begin_ = girl_end_;
+		robot_end_ = robot_begin_ + cleaner_status_temp[2].size();*/
 		cleaner_move_.resize(cleaner_status_.size());
 		// 事前に最小移動歩数を計算しておく(ワーシャル・フロイド法)
 		min_cost_.resize(x_ * y_);
@@ -294,6 +302,28 @@ public:
 			if (!MustCleanFloor(cell)) continue;
 			// 拭く必要がある場合は調査する
 			bool can_move_flg = false;
+			/*for (auto it_c = boy_begin_; it_c != boy_end_; ++it_c) {
+				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_combo_)
+					|| (cell == Floor::Apple)
+					|| (cell == Floor::Bottle)) continue;
+				can_move_flg = true;
+				goto can_move_flg_label;
+			}
+			for (auto it_c = girl_begin_; it_c != girl_end_; ++it_c) {
+				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_combo_)
+					|| (cell == Floor::Pool)
+					|| (cell == Floor::Bottle)) continue;
+				can_move_flg = true;
+				goto can_move_flg_label;
+			}
+			for (auto it_c = robot_begin_; it_c != robot_end_; ++it_c) {
+				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_combo_)
+					|| (cell == Floor::Pool)
+					|| (cell == Floor::Apple)) continue;
+				can_move_flg = true;
+				goto can_move_flg_label;
+			}
+can_move_flg_label:*/
 			for (const auto &it_c : cleaner_status_) {
 				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_combo_)
 					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
@@ -313,6 +343,28 @@ public:
 			if (!MustCleanFloor(cell)) continue;
 			// 拭く必要がある場合は調査する
 			bool can_move_flg = false;
+/*			for (auto it_c = boy_begin_; it_c != boy_end_; ++it_c) {
+				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_)
+					|| (cell == Floor::Apple)
+					|| (cell == Floor::Bottle)) continue;
+				can_move_flg = true;
+				goto can_move_flg_label;
+			}
+			for (auto it_c = girl_begin_; it_c != girl_end_; ++it_c) {
+				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_)
+					|| (cell == Floor::Pool)
+					|| (cell == Floor::Bottle)) continue;
+				can_move_flg = true;
+				goto can_move_flg_label;
+			}
+			for (auto it_c = robot_begin_; it_c != robot_end_; ++it_c) {
+				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_)
+					|| (cell == Floor::Pool)
+					|| (cell == Floor::Apple)) continue;
+				can_move_flg = true;
+				goto can_move_flg_label;
+			}
+can_move_flg_label:*/
 			for (const auto &it_c : cleaner_status_) {
 				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_)
 					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
