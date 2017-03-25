@@ -301,30 +301,14 @@ public:
 			const auto &cell = floor_[position];
 			if (!MustCleanFloor(cell)) continue;
 			// 拭く必要がある場合は調査する
+			// 全従業員を走査して、いずれもその床を磨けない場合はcan_move_flg = falseのまま
 			bool can_move_flg = false;
-			/*for (auto it_c = boy_begin_; it_c != boy_end_; ++it_c) {
-				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_combo_)
-					|| (cell == Floor::Apple)
-					|| (cell == Floor::Bottle)) continue;
-				can_move_flg = true;
-				goto can_move_flg_label;
-			}
-			for (auto it_c = girl_begin_; it_c != girl_end_; ++it_c) {
-				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_combo_)
-					|| (cell == Floor::Pool)
-					|| (cell == Floor::Bottle)) continue;
-				can_move_flg = true;
-				goto can_move_flg_label;
-			}
-			for (auto it_c = robot_begin_; it_c != robot_end_; ++it_c) {
-				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_combo_)
-					|| (cell == Floor::Pool)
-					|| (cell == Floor::Apple)) continue;
-				can_move_flg = true;
-				goto can_move_flg_label;
-			}
-can_move_flg_label:*/
 			for (const auto &it_c : cleaner_status_) {
+				// 磨けない要因：
+				// ・歩数の関係で行けない
+				// ・水たまりだが自分は男の子じゃない
+				// ・リンゴだが自分は女の子じゃない
+				// ・ビンだが自分はロボットじゃない
 				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_combo_)
 					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
 					|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
@@ -343,29 +327,12 @@ can_move_flg_label:*/
 			if (!MustCleanFloor(cell)) continue;
 			// 拭く必要がある場合は調査する
 			bool can_move_flg = false;
-/*			for (auto it_c = boy_begin_; it_c != boy_end_; ++it_c) {
-				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_)
-					|| (cell == Floor::Apple)
-					|| (cell == Floor::Bottle)) continue;
-				can_move_flg = true;
-				goto can_move_flg_label;
-			}
-			for (auto it_c = girl_begin_; it_c != girl_end_; ++it_c) {
-				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_)
-					|| (cell == Floor::Pool)
-					|| (cell == Floor::Bottle)) continue;
-				can_move_flg = true;
-				goto can_move_flg_label;
-			}
-			for (auto it_c = robot_begin_; it_c != robot_end_; ++it_c) {
-				if ((min_cost_[position][it_c->position_now_] + it_c->move_now_ > it_c->move_max_)
-					|| (cell == Floor::Pool)
-					|| (cell == Floor::Apple)) continue;
-				can_move_flg = true;
-				goto can_move_flg_label;
-			}
-can_move_flg_label:*/
 			for (const auto &it_c : cleaner_status_) {
+				// 磨けない要因：
+				// ・歩数の関係で行けない
+				// ・水たまりだが自分は男の子じゃない
+				// ・リンゴだが自分は女の子じゃない
+				// ・ビンだが自分はロボットじゃない
 				if ((min_cost_[position][it_c.position_now_] + it_c.move_now_ > it_c.move_max_)
 					|| (cell == Floor::Pool && it_c.type_ != Floor::Boy)
 					|| (cell == Floor::Apple && it_c.type_ != Floor::Girl)
